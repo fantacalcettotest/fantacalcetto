@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "db:seed": "node --experimental-strip-types --experimental-default-type=module prisma/seed.ts",
+    "scoring:check": "node --experimental-strip-types --experimental-default-type=module --experimental-specifier-resolution=node scripts/manual-scoring-check.mjs",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:format": "prisma format"
