@@ -1,0 +1,288 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum LeagueRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum LeagueStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum MatchdayStatus {
+  DRAFT
+  OPEN
+  LOCKED
+  SCORED
+  CLOSED
+}
+
+enum LineupStatus {
+  DRAFT
+  SUBMITTED
+  LOCKED
+}
+
+enum SlotType {
+  STARTER
+  BENCH
+}
+
+enum RequiredVoteStatus {
+  PENDING
+  COMPLETED
+  SKIPPED
+}
+
+enum VoteStatus {
+  PENDING
+  CONFIRMED
+}
+
+enum ScoreStatus {
+  PENDING
+  CALCULATED
+  FINALIZED
+}
+
+enum ScorePlayerFinalType {
+  STARTER_PLAYED
+  REPLACED_BY_BENCH
+  AUTO_SUB_IN
+  SV_NOT_REPLACED
+  BENCH_UNUSED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  // Collegamento futuro all'utente di Supabase Auth mantenendo un ID interno separato per l'app.
+  authUserId    String?        @unique
+  displayName   String?
+  role          UserRole       @default(USER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  leagues       League[]       @relation("LeagueCreator")
+  leagueMembers LeagueMember[]
+  fantasyTeams  FantasyTeam[]
+}
+
+model League {
+  id            String         @id @default(cuid())
+  name          String
+  status        LeagueStatus   @default(DRAFT)
+  startersCount Int            @default(5)
+  maxAutoSubs   Int            @default(3)
+  createdById   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  createdBy     User           @relation("LeagueCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  members       LeagueMember[]
+  fantasyTeams  FantasyTeam[]
+  matchdays     Matchday[]
+
+  @@index([createdById])
+}
+
+model LeagueMember {
+  id        String     @id @default(cuid())
+  leagueId  String
+  userId    String
+  role      LeagueRole @default(MEMBER)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  league    League     @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, userId])
+  @@index([userId])
+}
+
+model Player {
+  id               String               @id @default(cuid())
+  name             String
+  teamName         String?
+  isActive         Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  rosterEntries    FantasyRoster[]
+  lineupPlayers    LineupPlayer[]
+  requiredVotes    RequiredVotePlayer[]
+  votes            PlayerVote[]
+  teamScorePlayers TeamScorePlayer[]
+}
+
+model FantasyTeam {
+  id         String          @id @default(cuid())
+  leagueId   String
+  userId     String
+  name       String
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  league     League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roster     FantasyRoster[]
+  lineups    Lineup[]
+  teamScores TeamScore[]
+
+  @@unique([leagueId, userId])
+  @@index([userId])
+}
+
+model FantasyRoster {
+  id            String      @id @default(cuid())
+  fantasyTeamId String
+  playerId      String
+  createdAt     DateTime    @default(now())
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  player        Player      @relation(fields: [playerId], references: [id], onDelete: Restrict)
+
+  @@unique([fantasyTeamId, playerId])
+  @@index([playerId])
+}
+
+model Matchday {
+  id               String               @id @default(cuid())
+  leagueId         String
+  number           Int
+  status           MatchdayStatus       @default(DRAFT)
+  lineupDeadlineAt DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  league           League               @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  lineups          Lineup[]
+  requiredVotes    RequiredVotePlayer[]
+  playerVotes      PlayerVote[]
+  teamScores       TeamScore[]
+
+  @@unique([leagueId, number])
+  @@index([leagueId, status])
+}
+
+model Lineup {
+  id            String         @id @default(cuid())
+  fantasyTeamId String
+  matchdayId    String
+  status        LineupStatus   @default(DRAFT)
+  submittedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  fantasyTeam   FantasyTeam    @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  matchday      Matchday       @relation(fields: [matchdayId], references: [id], onDelete: Cascade)
+  players       LineupPlayer[]
+  teamScore     TeamScore?
+
+  @@unique([fantasyTeamId, matchdayId])
+  @@index([matchdayId, status])
+}
+
+model LineupPlayer {
+  id                   String            @id @default(cuid())
+  lineupId             String
+  playerId             String
+  slotType             SlotType
+  positionOrder        Int
+  createdAt            DateTime          @default(now())
+  lineup               Lineup            @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+  player               Player            @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  scoreEntries         TeamScorePlayer[] @relation("ScoreEntryLineupPlayer")
+  replacedScoreEntries TeamScorePlayer[] @relation("ReplacedLineupPlayer")
+
+  @@unique([lineupId, playerId])
+  @@unique([lineupId, slotType, positionOrder])
+  @@index([playerId])
+}
+
+model RequiredVotePlayer {
+  id         String             @id @default(cuid())
+  matchdayId String
+  playerId   String
+  status     RequiredVoteStatus @default(PENDING)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  matchday   Matchday           @relation(fields: [matchdayId], references: [id], onDelete: Cascade)
+  player     Player             @relation(fields: [playerId], references: [id], onDelete: Restrict)
+
+  @@unique([matchdayId, playerId])
+  @@index([status])
+}
+
+model PlayerVote {
+  id               String            @id @default(cuid())
+  matchdayId       String
+  playerId         String
+  status           VoteStatus        @default(PENDING)
+  isSv             Boolean           @default(false)
+  baseVote         Decimal?          @db.Decimal(4, 2)
+  bonusPoints      Decimal           @default(0) @db.Decimal(5, 2)
+  malusPoints      Decimal           @default(0) @db.Decimal(5, 2)
+  finalFantavote   Decimal?          @db.Decimal(5, 2)
+  notes            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  matchday         Matchday          @relation(fields: [matchdayId], references: [id], onDelete: Cascade)
+  player           Player            @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  teamScorePlayers TeamScorePlayer[]
+
+  @@unique([matchdayId, playerId])
+  @@index([status, isSv])
+}
+
+model TeamScore {
+  id            String            @id @default(cuid())
+  fantasyTeamId String
+  matchdayId    String
+  lineupId      String            @unique
+  status        ScoreStatus       @default(PENDING)
+  totalScore    Decimal?          @db.Decimal(6, 2)
+  autoSubsUsed  Int               @default(0)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  fantasyTeam   FantasyTeam       @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  matchday      Matchday          @relation(fields: [matchdayId], references: [id], onDelete: Cascade)
+  lineup        Lineup            @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+  players       TeamScorePlayer[]
+
+  @@unique([fantasyTeamId, matchdayId])
+  @@index([matchdayId, status])
+}
+
+model TeamScorePlayer {
+  id                     String               @id @default(cuid())
+  teamScoreId            String
+  lineupPlayerId         String
+  playerId               String
+  playerVoteId           String?
+  replacedLineupPlayerId String?
+  finalType              ScorePlayerFinalType
+  slotType               SlotType
+  positionOrder          Int
+  countsForScore         Boolean              @default(false)
+  isSv                   Boolean              @default(false)
+  finalFantavote         Decimal?             @db.Decimal(5, 2)
+  createdAt              DateTime             @default(now())
+  teamScore              TeamScore            @relation(fields: [teamScoreId], references: [id], onDelete: Cascade)
+  lineupPlayer           LineupPlayer         @relation("ScoreEntryLineupPlayer", fields: [lineupPlayerId], references: [id], onDelete: Restrict)
+  player                 Player               @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  playerVote             PlayerVote?          @relation(fields: [playerVoteId], references: [id], onDelete: SetNull)
+  replacedLineupPlayer   LineupPlayer?        @relation("ReplacedLineupPlayer", fields: [replacedLineupPlayerId], references: [id], onDelete: SetNull)
+
+  @@unique([teamScoreId, lineupPlayerId])
+  @@index([teamScoreId, finalType])
+  @@index([playerId])
+}
