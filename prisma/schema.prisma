@@ -49,7 +49,8 @@ enum SlotType {
 enum RequiredVoteStatus {
   PENDING
   COMPLETED
-  SKIPPED
+  SV
+  IGNORED
 }
 
 enum VoteStatus {
@@ -58,9 +59,9 @@ enum VoteStatus {
 }
 
 enum ScoreStatus {
-  PENDING
   CALCULATED
-  FINALIZED
+  PUBLISHED
+  LOCKED
 }
 
 enum ScorePlayerFinalType {
@@ -216,6 +217,7 @@ model RequiredVotePlayer {
   matchdayId String
   playerId   String
   status     RequiredVoteStatus @default(PENDING)
+  usageCount Int                @default(1)
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
   matchday   Matchday           @relation(fields: [matchdayId], references: [id], onDelete: Cascade)
@@ -260,9 +262,10 @@ model TeamScore {
   fantasyTeamId String
   matchdayId    String
   lineupId      String            @unique
-  status        ScoreStatus       @default(PENDING)
+  status        ScoreStatus       @default(CALCULATED)
   totalScore    Decimal?          @db.Decimal(6, 2)
   autoSubsUsed  Int               @default(0)
+  publishedAt   DateTime?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   fantasyTeam   FantasyTeam       @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
