@@ -26,10 +26,13 @@ enum LeagueStatus {
 
 enum MatchdayStatus {
   DRAFT
-  OPEN
+  LINEUPS_OPEN
+  LINEUPS_LOCKED
+  VOTES_PENDING
+  VOTES_COMPLETED
+  SCORES_CALCULATED
+  PUBLISHED
   LOCKED
-  SCORED
-  CLOSED
 }
 
 enum LineupStatus {
