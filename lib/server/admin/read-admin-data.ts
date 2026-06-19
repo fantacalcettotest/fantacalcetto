@@ -31,7 +31,10 @@ export async function getAdminDashboardData() {
   });
 
   return {
-    leagues
+    leagues: leagues.map((league) => ({
+      ...league,
+      availableSpots: Math.max(league.maxTeams - league._count.fantasyTeams, 0)
+    }))
   };
 }
 

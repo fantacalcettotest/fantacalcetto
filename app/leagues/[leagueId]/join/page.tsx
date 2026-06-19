@@ -53,27 +53,44 @@ export default async function JoinLeaguePage({
           <h1 className="mt-3 text-3xl font-bold">Entra nella lega</h1>
           <p className="mt-3 text-sm text-slate-300">
             Lega <strong>{data.league.name}</strong> | Membri{" "}
-            {data.league._count.members} | Squadre {data.league._count.fantasyTeams}
+            {data.league._count.members} | Squadre{" "}
+            {data.league._count.fantasyTeams}/{data.league.maxTeams}
           </p>
         </section>
 
         <Feedback error={error} />
 
-        {data.existingTeam ? (
+        {data.existingGlobalTeam ? (
           <section className="rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold text-slate-900">
-              Hai gia una squadra in questa lega
+              Hai gia una squadra: {data.existingGlobalTeam.name}
             </h2>
             <p className="mt-2 text-sm text-slate-600">
-              Squadra attuale: <strong>{data.existingTeam.name}</strong>
+              Lega attuale: <strong>{data.existingGlobalTeam.league.name}</strong>
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
-                href={`/me/teams/${data.existingTeam.id}`}
+                href={`/me/teams/${data.existingGlobalTeam.id}`}
                 className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
               >
                 Apri la mia squadra
               </Link>
+              <Link
+                href={`/leagues/${data.league.id}`}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+              >
+                Torna alla lega
+              </Link>
+            </div>
+          </section>
+        ) : data.isFull ? (
+          <section className="rounded-3xl border border-amber-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-slate-900">Lega piena</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              La lega ha raggiunto il numero massimo di squadre:{" "}
+              <strong>{data.league.maxTeams}</strong>.
+            </p>
+            <div className="mt-4">
               <Link
                 href={`/leagues/${data.league.id}`}
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
@@ -88,8 +105,9 @@ export default async function JoinLeaguePage({
               Crea la tua squadra fantasy
             </h2>
             <p className="mt-2 text-sm text-slate-600">
-              Un utente puo avere una sola squadra per lega. Il nome deve essere
-              univoco nella lega e lungo massimo 50 caratteri.
+              Squadre iscritte: <strong>{data.league._count.fantasyTeams}</strong> /{" "}
+              <strong>{data.league.maxTeams}</strong>. Ogni utente puo avere una
+              sola squadra in tutta l&apos;app.
             </p>
 
             <form action={createFantasyTeamAction} className="mt-5 space-y-4">
@@ -101,6 +119,7 @@ export default async function JoinLeaguePage({
                   type="text"
                   name="teamName"
                   maxLength={50}
+                  disabled={!data.canJoin}
                   className="w-full rounded-xl border border-slate-300 px-3 py-2"
                   placeholder="Inserisci il nome della tua squadra"
                 />
@@ -109,6 +128,7 @@ export default async function JoinLeaguePage({
               <div className="flex flex-wrap gap-3">
                 <button
                   type="submit"
+                  disabled={!data.canJoin}
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
                 >
                   Crea squadra

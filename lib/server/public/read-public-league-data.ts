@@ -33,6 +33,7 @@ export async function getPublicLeagueHomeData(leagueId: string) {
     prisma.league.findUnique({
       where: { id: leagueId },
       select: {
+        maxTeams: true,
         id: true,
         name: true,
         _count: {
@@ -72,6 +73,8 @@ export async function getPublicLeagueHomeData(leagueId: string) {
     league: {
       fantasyTeamsCount: league._count.fantasyTeams,
       id: league.id,
+      isFull: league._count.fantasyTeams >= league.maxTeams,
+      maxTeams: league.maxTeams,
       name: league.name,
       publishedMatchdaysCount: league.matchdays.length
     },

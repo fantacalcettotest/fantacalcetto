@@ -12,8 +12,26 @@ export default async function AdminPage() {
   return (
     <AdminShell
       title="Dashboard amministrazione"
-      subtitle="Area admin demo per gestire giornate, pagelle assistite e risultati senza autenticazione."
+      subtitle="Area admin per gestire leghe, giornate, pagelle assistite e risultati."
     >
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Leghe</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Crea nuove leghe e monitora capienza, giornate e classifica.
+            </p>
+          </div>
+
+          <Link
+            href="/admin/leagues/new"
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+          >
+            Crea nuova lega
+          </Link>
+        </div>
+      </section>
+
       {leagues.length === 0 ? (
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-slate-600">
@@ -33,11 +51,18 @@ export default async function AdminPage() {
                     {league.name}
                   </h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Membri: {league._count.members} | Fantasy team:{" "}
-                    {league._count.fantasyTeams}
+                    Membri: {league._count.members} | Squadre:{" "}
+                    {league._count.fantasyTeams}/{league.maxTeams} | Posti disponibili:{" "}
+                    {league.availableSpots}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
+                  <Link
+                    href={`/leagues/${league.id}`}
+                    className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                  >
+                    Pagina pubblica
+                  </Link>
                   <Link
                     href={`/admin/leagues/${league.id}/standings`}
                     className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"

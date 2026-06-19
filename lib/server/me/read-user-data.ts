@@ -52,6 +52,8 @@ export async function getUserDashboardData(appUserId: string) {
     }
   >();
 
+  const myTeam = user.fantasyTeams[0] ?? null;
+
   for (const membership of user.leagueMembers) {
     leaguesMap.set(membership.league.id, {
       id: membership.league.id,
@@ -78,18 +80,20 @@ export async function getUserDashboardData(appUserId: string) {
     leagues: Array.from(leaguesMap.values()).sort((left, right) =>
       left.name.localeCompare(right.name, "it")
     ),
+    myTeam,
     user
   };
 }
 
 export async function getLeagueJoinPageData(leagueId: string, appUserId: string) {
-  const [league, existingTeam] = await Promise.all([
+  const [league, existingLeagueTeam, existingGlobalTeam] = await Promise.all([
     prisma.league.findUnique({
       where: {
         id: leagueId
       },
       select: {
         id: true,
+        maxTeams: true,
         name: true,
         status: true,
         _count: {
@@ -109,6 +113,27 @@ export async function getLeagueJoinPageData(leagueId: string, appUserId: string)
       },
       select: {
         id: true,
+        league: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        name: true
+      }
+    }),
+    prisma.fantasyTeam.findUnique({
+      where: {
+        userId: appUserId
+      },
+      select: {
+        id: true,
+        league: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         name: true
       }
     })
@@ -119,7 +144,12 @@ export async function getLeagueJoinPageData(leagueId: string, appUserId: string)
   }
 
   return {
-    existingTeam,
+    canJoin:
+      !existingGlobalTeam &&
+      league._count.fantasyTeams < league.maxTeams,
+    existingGlobalTeam,
+    existingLeagueTeam,
+    isFull: league._count.fantasyTeams >= league.maxTeams,
     league
   };
 }

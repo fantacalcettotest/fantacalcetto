@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { requireAdminAccess } from "@/lib/auth/admin.ts";
 import { prisma } from "@/lib/prisma.ts";
 import { calculateFantavote } from "@/lib/scoring/calculate-fantavote.ts";
+import { createLeague } from "@/lib/server/admin/create-league.ts";
 import { calculateFantasyFixtureResults } from "@/lib/server/fixtures/calculate-fantasy-fixture-results.ts";
 import { generateFantasyFixtures } from "@/lib/server/fixtures/generate-fantasy-fixtures.ts";
 import { checkVotesCompletion } from "@/lib/server/matchdays/check-votes-completion.ts";
@@ -72,6 +73,12 @@ function revalidateAdminPaths(matchdayId: string, leagueId?: string | null) {
   if (leagueId) {
     revalidatePath(`/admin/leagues/${leagueId}/standings`);
   }
+}
+
+function revalidateLeaguePaths(leagueId: string) {
+  revalidatePath("/admin");
+  revalidatePath(`/leagues/${leagueId}`);
+  revalidatePath(`/leagues/${leagueId}/standings`);
 }
 
 function readRequiredString(
@@ -346,6 +353,39 @@ export async function generateRequiredVotePlayersAction(formData: FormData) {
   }
 
   redirectWithMessage(redirectPath, { error: errorMessage, notice });
+}
+
+export async function createLeagueAction(formData: FormData) {
+  const authContext = await requireAdminAccess();
+  const rawName = formData.get("name");
+  const rawMaxTeams = formData.get("maxTeams");
+
+  const name = typeof rawName === "string" ? rawName : "";
+  const maxTeams =
+    typeof rawMaxTeams === "string" && rawMaxTeams.trim().length > 0
+      ? Number(rawMaxTeams)
+      : Number.NaN;
+
+  try {
+    const result = await createLeague({
+      createdById: authContext.appUser.id,
+      maxTeams,
+      name
+    });
+
+    revalidateLeaguePaths(result.leagueId);
+
+    redirectWithMessage("/admin", {
+      notice: `Lega creata: ${result.name}. Max squadre: ${result.maxTeams}.`
+    });
+  } catch (error) {
+    redirectWithMessage("/admin/leagues/new", {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Creazione lega non riuscita."
+    });
+  }
 }
 
 export async function savePlayerVoteAction(formData: FormData) {

@@ -9,7 +9,6 @@ export type CreateUserFantasyTeamInput = {
 };
 
 export type CreateUserFantasyTeamResult = {
-  created: boolean;
   teamId: string;
 };
 
@@ -37,7 +36,13 @@ export async function createUserFantasyTeam(
           id: input.leagueId
         },
         select: {
-          id: true
+          _count: {
+            select: {
+              fantasyTeams: true
+            }
+          },
+          id: true,
+          maxTeams: true
         }
       });
 
@@ -45,23 +50,24 @@ export async function createUserFantasyTeam(
         throw new Error("Lega non trovata.");
       }
 
-      const existingTeam = await tx.fantasyTeam.findUnique({
+      const existingTeam = await tx.fantasyTeam.findFirst({
         where: {
-          leagueId_userId: {
-            leagueId: input.leagueId,
-            userId: input.appUserId
-          }
+          userId: input.appUserId
         },
         select: {
-          id: true
+          id: true,
+          name: true
         }
       });
 
       if (existingTeam) {
-        return {
-          created: false,
-          teamId: existingTeam.id
-        };
+        throw new Error(
+          "Hai gia una squadra. Ogni utente puo avere una sola squadra."
+        );
+      }
+
+      if (league._count.fantasyTeams >= league.maxTeams) {
+        throw new Error("La lega ha raggiunto il numero massimo di squadre.");
       }
 
       const duplicateName = await tx.fantasyTeam.findFirst({
@@ -108,7 +114,6 @@ export async function createUserFantasyTeam(
       });
 
       return {
-        created: true,
         teamId: team.id
       };
     });
@@ -117,7 +122,9 @@ export async function createUserFantasyTeam(
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
-      throw new Error("Hai gia una squadra in questa lega.");
+      throw new Error(
+        "Hai gia una squadra. Ogni utente puo avere una sola squadra."
+      );
     }
 
     throw error;

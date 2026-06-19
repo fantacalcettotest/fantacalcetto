@@ -27,6 +27,33 @@ export default async function MePage() {
         </p>
       </section>
 
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">La mia squadra</h2>
+        {data.myTeam ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">
+                {data.myTeam.name}
+              </h3>
+              <p className="mt-2 text-sm text-slate-600">
+                Lega: <strong>{data.myTeam.league.name}</strong>
+              </p>
+            </div>
+
+            <Link
+              href={`/me/teams/${data.myTeam.id}`}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+            >
+              Apri la mia squadra
+            </Link>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-600">
+            Entra in una lega per creare la tua squadra.
+          </p>
+        )}
+      </section>
+
       {data.leagues.length === 0 ? (
         <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600 shadow-sm">
           Entra in una lega per creare la tua squadra.
@@ -48,8 +75,7 @@ export default async function MePage() {
                     <p className="mt-2 text-sm text-slate-600">
                       Membership:{" "}
                       <strong>{league.membershipRole ?? "Nessuna"}</strong> |
-                      Squadra:{" "}
-                      <strong>{league.myTeam?.name ?? "Non ancora creata"}</strong>
+                      Squadra: <strong>{league.myTeam?.name ?? "-"}</strong>
                     </p>
                   </div>
 
@@ -68,12 +94,9 @@ export default async function MePage() {
                         La mia squadra
                       </Link>
                     ) : (
-                      <Link
-                        href={`/leagues/${league.id}/join`}
-                        className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
-                      >
-                        Crea la tua squadra
-                      </Link>
+                      <span className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-500">
+                        Nessuna squadra
+                      </span>
                     )}
                   </div>
                 </div>
