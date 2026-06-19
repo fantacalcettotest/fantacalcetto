@@ -28,6 +28,36 @@ export async function getPublicLeagueLayoutData(leagueId: string) {
   });
 }
 
+export async function getPublicLeaguesListData() {
+  const leagues = await prisma.league.findMany({
+    orderBy: [{ createdAt: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      maxTeams: true,
+      name: true,
+      _count: {
+        select: {
+          fantasyTeams: true
+        }
+      }
+    }
+  });
+
+  return leagues.map((league) => {
+    const fantasyTeamsCount = league._count.fantasyTeams;
+    const availableSpots = Math.max(league.maxTeams - fantasyTeamsCount, 0);
+
+    return {
+      availableSpots,
+      fantasyTeamsCount,
+      id: league.id,
+      maxTeams: league.maxTeams,
+      name: league.name,
+      statusLabel: availableSpots > 0 ? "Aperta" : "Piena"
+    };
+  });
+}
+
 export async function getPublicLeagueHomeData(leagueId: string) {
   const [league, standingsResult] = await Promise.all([
     prisma.league.findUnique({
