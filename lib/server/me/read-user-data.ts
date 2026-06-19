@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma.ts";
+import type { PlayerRoleFilter } from "@/lib/players/player-role.ts";
+import { validateRosterComposition } from "@/lib/server/rosters/validate-roster-composition.ts";
 
 export async function getUserDashboardData(appUserId: string) {
   const user = await prisma.user.findUnique({
@@ -169,13 +171,15 @@ export async function getUserTeamPageData(teamId: string) {
       },
       name: true,
       roster: {
-        orderBy: [{ player: { name: "asc" } }],
+        orderBy: [{ player: { role: "asc" } }, { player: { name: "asc" } }],
         select: {
           id: true,
           player: {
             select: {
               id: true,
               name: true,
+              role: true,
+              source: true,
               teamName: true
             }
           }
@@ -184,4 +188,52 @@ export async function getUserTeamPageData(teamId: string) {
       userId: true
     }
   });
+}
+
+export async function getUserTeamRosterPageData(
+  teamId: string,
+  roleFilter: PlayerRoleFilter
+) {
+  const [team, activePlayersCount, availablePlayers] = await Promise.all([
+    getUserTeamPageData(teamId),
+    prisma.player.count({
+      where: {
+        isActive: true
+      }
+    }),
+    prisma.player.findMany({
+      where: {
+        isActive: true,
+        ...(roleFilter === "ALL" ? {} : { role: roleFilter })
+      },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        source: true,
+        teamName: true
+      }
+    })
+  ]);
+
+  if (!team) {
+    return null;
+  }
+
+  const rosterPlayerIds = new Set(team.roster.map((entry) => entry.player.id));
+
+  return {
+    activePlayersCount,
+    availablePlayers: availablePlayers.map((player) => ({
+      ...player,
+      isSelected: rosterPlayerIds.has(player.id)
+    })),
+    rosterValidation: validateRosterComposition(
+      team.roster.map((entry) => ({
+        role: entry.player.role
+      }))
+    ),
+    team
+  };
 }

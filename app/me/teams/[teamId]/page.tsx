@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { getPlayerRoleLabel } from "@/lib/players/player-role";
 import { requireAuthenticatedAppUser } from "@/lib/auth/app-user";
 import { getUserTeamPageData } from "@/lib/server/me/read-user-data";
+import { validateRosterComposition } from "@/lib/server/rosters/validate-roster-composition";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +51,17 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
     );
   }
 
+  const rosterValidation = validateRosterComposition(
+    team.roster.map((entry) => ({
+      role: entry.player.role
+    }))
+  );
+  const rosterStatus = !rosterValidation.isComplete
+    ? "Rosa incompleta"
+    : rosterValidation.isValid
+      ? "Rosa valida"
+      : "Rosa completa ma non valida";
+
   return (
     <div className="space-y-6">
       <Feedback notice={notice} />
@@ -63,6 +76,12 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
           </div>
 
           <div className="flex flex-wrap gap-3">
+            <Link
+              href={`/me/teams/${team.id}/roster`}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
+            >
+              Gestisci rosa
+            </Link>
             <Link
               href={`/leagues/${team.league.id}`}
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
@@ -79,6 +98,26 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
         </div>
       </section>
 
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">Stato rosa</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Stato: <strong>{rosterStatus}</strong> | Totale:{" "}
+          <strong>{rosterValidation.total}</strong> | Portieri:{" "}
+          <strong>{rosterValidation.goalkeeperCount}</strong> | Difensori:{" "}
+          <strong>{rosterValidation.defenderCount}</strong> | Centrocampisti:{" "}
+          <strong>{rosterValidation.midfielderCount}</strong> | Attaccanti:{" "}
+          <strong>{rosterValidation.attackerCount}</strong>
+        </p>
+
+        {rosterValidation.errors.length > 0 ? (
+          <ul className="mt-4 space-y-2 text-sm text-rose-700">
+            {rosterValidation.errors.map((entry) => (
+              <li key={entry}>{entry}</li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
       {team.roster.length === 0 ? (
         <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600 shadow-sm">
           La rosa non e ancora stata assegnata.
@@ -91,7 +130,9 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
               <thead>
                 <tr className="text-left text-slate-500">
                   <th className="px-3 py-2 font-medium">Giocatore</th>
+                  <th className="px-3 py-2 font-medium">Ruolo</th>
                   <th className="px-3 py-2 font-medium">Squadra reale</th>
+                  <th className="px-3 py-2 font-medium">Source</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -101,7 +142,13 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
                       {entry.player.name}
                     </td>
                     <td className="px-3 py-2 text-slate-600">
+                      {getPlayerRoleLabel(entry.player.role)}
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">
                       {entry.player.teamName ?? "-"}
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">
+                      {entry.player.source ?? "-"}
                     </td>
                   </tr>
                 ))}
