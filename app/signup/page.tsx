@@ -121,6 +121,12 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
 
           <div className="mt-6 space-y-2 text-sm text-slate-600">
             <p>
+              Vuoi esplorare le leghe?{" "}
+              <Link href="/leagues" className="font-medium text-slate-900 underline">
+                Leghe
+              </Link>
+            </p>
+            <p>
               Hai gia un account?{" "}
               <Link
                 href={`/login?next=${encodeURIComponent(nextPath)}`}

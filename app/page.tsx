@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { PlaceholderCard } from "@/components/home/placeholder-card";
 import { homeSections } from "@/lib/home-sections";
 
@@ -16,6 +18,14 @@ export default function HomePage() {
             Base iniziale della web app fantasy calcetto per leghe private da 5
             giocatori, costruita con Next.js, TypeScript e Tailwind CSS.
           </p>
+          <div className="mt-6">
+            <Link
+              href="/leagues"
+              className="inline-flex rounded-xl bg-white px-4 py-2 text-sm font-medium text-emerald-900 transition hover:bg-emerald-50"
+            >
+              Vedi leghe
+            </Link>
+          </div>
         </section>
 
         <section className="mt-8 grid gap-6 md:grid-cols-2">

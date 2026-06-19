@@ -103,6 +103,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           <div className="mt-6 space-y-2 text-sm text-slate-600">
             <p>
+              Vuoi esplorare le leghe?{" "}
+              <Link href="/leagues" className="font-medium text-slate-900 underline">
+                Leghe
+              </Link>
+            </p>
+            <p>
               Non hai un account?{" "}
               <Link
                 href={`/signup?next=${encodeURIComponent(nextPath)}`}
