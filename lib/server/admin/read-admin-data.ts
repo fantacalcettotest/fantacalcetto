@@ -3,6 +3,14 @@ import type { PlayerRoleFilter } from "@/lib/players/player-role";
 import { calculateLeagueStandings } from "../standings/calculate-league-standings.ts";
 import { prismaDecimalToNumber } from "../votes/shared.ts";
 
+export type AdminPlayerSourceFilter =
+  | "ALL"
+  | "api-football"
+  | "demo"
+  | "unknown";
+
+export type AdminPlayerStatusFilter = "ACTIVE" | "ALL" | "INACTIVE";
+
 export async function getAdminDashboardData() {
   const leagues = await prisma.league.findMany({
     orderBy: [{ createdAt: "asc" }, { name: "asc" }],
@@ -508,6 +516,88 @@ export async function getAdminLeaguePlayersData(
     })),
     roleFilter,
     searchQuery: normalizedSearchQuery
+  };
+}
+
+export async function getAdminPlayersData(options: {
+  limit?: number;
+  roleFilter: PlayerRoleFilter;
+  searchQuery?: string;
+  sourceFilter: AdminPlayerSourceFilter;
+  statusFilter: AdminPlayerStatusFilter;
+}) {
+  const normalizedSearchQuery = options.searchQuery?.trim() ?? "";
+  const limit = options.limit ?? 100;
+
+  const where = {
+    ...(normalizedSearchQuery.length > 0
+      ? {
+          name: {
+            contains: normalizedSearchQuery,
+            mode: "insensitive" as const
+          }
+        }
+      : {}),
+    ...(options.roleFilter === "ALL" ? {} : { role: options.roleFilter }),
+    ...(options.statusFilter === "ALL"
+      ? {}
+      : { isActive: options.statusFilter === "ACTIVE" }),
+    ...(options.sourceFilter === "ALL"
+      ? {}
+      : options.sourceFilter === "unknown"
+        ? {
+            OR: [{ source: null }, { source: "" }]
+          }
+        : {
+            source: options.sourceFilter
+          })
+  };
+
+  const [players, filteredCount, totalPlayers, activePlayersCount, inactivePlayersCount] =
+    await Promise.all([
+      prisma.player.findMany({
+        where,
+        orderBy: [{ name: "asc" }, { id: "asc" }],
+        take: limit,
+        select: {
+          externalId: true,
+          id: true,
+          isActive: true,
+          name: true,
+          role: true,
+          source: true
+        }
+      }),
+      prisma.player.count({ where }),
+      prisma.player.count(),
+      prisma.player.count({
+        where: {
+          isActive: true
+        }
+      }),
+      prisma.player.count({
+        where: {
+          isActive: false
+        }
+      })
+    ]);
+
+  return {
+    counts: {
+      active: activePlayersCount,
+      filtered: filteredCount,
+      inactive: inactivePlayersCount,
+      total: totalPlayers
+    },
+    filters: {
+      roleFilter: options.roleFilter,
+      searchQuery: normalizedSearchQuery,
+      sourceFilter: options.sourceFilter,
+      statusFilter: options.statusFilter
+    },
+    hasMore: filteredCount > players.length,
+    limit,
+    players
   };
 }
 

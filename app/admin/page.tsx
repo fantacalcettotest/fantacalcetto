@@ -57,12 +57,20 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             </p>
           </div>
 
-          <Link
-            href="/admin/leagues/new"
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-          >
-            Crea nuova lega
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/admin/players"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+            >
+              Giocatori
+            </Link>
+            <Link
+              href="/admin/leagues/new"
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+            >
+              Crea nuova lega
+            </Link>
+          </div>
         </div>
       </section>
 

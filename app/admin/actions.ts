@@ -90,6 +90,48 @@ function revalidateLeaguePaths(leagueId: string) {
   revalidatePath(`/admin/leagues/${leagueId}/matchdays/new`);
 }
 
+async function revalidateGlobalPlayerAvailabilityPaths() {
+  revalidatePath("/admin");
+  revalidatePath("/admin/players");
+  revalidatePath("/me");
+  revalidatePath("/leagues");
+
+  const [leagues, teams, openMatchdays] = await Promise.all([
+    prisma.league.findMany({
+      select: {
+        id: true
+      }
+    }),
+    prisma.fantasyTeam.findMany({
+      select: {
+        id: true
+      }
+    }),
+    prisma.matchday.findMany({
+      where: {
+        status: MatchdayStatus.LINEUPS_OPEN
+      },
+      select: {
+        id: true
+      }
+    })
+  ]);
+
+  for (const league of leagues) {
+    revalidatePath(`/leagues/${league.id}`);
+    revalidatePath(`/admin/leagues/${league.id}/players`);
+  }
+
+  for (const team of teams) {
+    revalidatePath(`/me/teams/${team.id}`);
+    revalidatePath(`/me/teams/${team.id}/roster`);
+
+    for (const matchday of openMatchdays) {
+      revalidatePath(`/me/teams/${team.id}/matchdays/${matchday.id}/lineup`);
+    }
+  }
+}
+
 async function revalidateLeaguePlayerAvailabilityPaths(leagueId: string) {
   revalidatePath("/admin");
   revalidatePath("/me");
@@ -490,6 +532,66 @@ export async function unblockPlayerInLeagueAction(formData: FormData) {
         error instanceof Error
           ? error.message
           : "Sblocco giocatore non riuscito."
+    });
+  }
+}
+
+export async function deactivatePlayerGloballyAction(formData: FormData) {
+  await assertAdminAction();
+  const playerId = readRequiredString(formData, "playerId");
+  const redirectPath = readRequiredString(formData, "redirectPath");
+
+  try {
+    await prisma.player.update({
+      where: {
+        id: playerId
+      },
+      data: {
+        isActive: false
+      }
+    });
+
+    await revalidateGlobalPlayerAvailabilityPaths();
+
+    redirectWithMessage(redirectPath, {
+      notice: "Giocatore disattivato globalmente."
+    });
+  } catch (error) {
+    redirectWithMessage(redirectPath, {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Disattivazione giocatore non riuscita."
+    });
+  }
+}
+
+export async function reactivatePlayerGloballyAction(formData: FormData) {
+  await assertAdminAction();
+  const playerId = readRequiredString(formData, "playerId");
+  const redirectPath = readRequiredString(formData, "redirectPath");
+
+  try {
+    await prisma.player.update({
+      where: {
+        id: playerId
+      },
+      data: {
+        isActive: true
+      }
+    });
+
+    await revalidateGlobalPlayerAvailabilityPaths();
+
+    redirectWithMessage(redirectPath, {
+      notice: "Giocatore riattivato globalmente."
+    });
+  } catch (error) {
+    redirectWithMessage(redirectPath, {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Riattivazione giocatore non riuscita."
     });
   }
 }
