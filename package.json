@@ -17,7 +17,8 @@
     "scoring:check": "node --experimental-strip-types --experimental-default-type=module --experimental-specifier-resolution=node scripts/manual-scoring-check.mjs",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
-    "prisma:format": "prisma format"
+    "prisma:format": "prisma format",
+"check:all": "node scripts/check-all.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
