@@ -86,6 +86,56 @@ export function buildLoginPath(options?: {
   return search.length > 0 ? `/login?${search}` : "/login";
 }
 
+function buildAuthPath(
+  pathname: string,
+  options?: {
+    error?: string;
+    next?: string;
+    notice?: string;
+  }
+) {
+  const searchParams = new URLSearchParams();
+
+  if (options?.error) {
+    searchParams.set("error", options.error);
+  }
+
+  if (options?.notice) {
+    searchParams.set("notice", options.notice);
+  }
+
+  if (options?.next) {
+    searchParams.set("next", getSafeNextPath(options.next));
+  }
+
+  const search = searchParams.toString();
+  return search.length > 0 ? `${pathname}?${search}` : pathname;
+}
+
+export function buildSignupPath(options?: {
+  error?: string;
+  next?: string;
+  notice?: string;
+}) {
+  return buildAuthPath("/signup", options);
+}
+
+export function buildForgotPasswordPath(options?: {
+  error?: string;
+  next?: string;
+  notice?: string;
+}) {
+  return buildAuthPath("/forgot-password", options);
+}
+
+export function buildResetPasswordPath(options?: {
+  error?: string;
+  next?: string;
+  notice?: string;
+}) {
+  return buildAuthPath("/reset-password", options);
+}
+
 export async function findAppUserByAuthUserId(authUserId: string) {
   return prisma.user.findUnique({
     where: {

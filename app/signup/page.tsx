@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { loginAction, logoutAction } from "@/app/auth/actions";
+import { logoutAction, signupAction } from "@/app/auth/actions";
 import {
   getAuthenticatedAppUserContext,
   getSafeNextPath
@@ -9,7 +9,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type LoginPageProps = {
+type SignupPageProps = {
   searchParams: Promise<{
     error?: string;
     next?: string;
@@ -41,7 +41,7 @@ function Feedback({
   );
 }
 
-export default async function LoginPage({ searchParams }: LoginPageProps) {
+export default async function SignupPage({ searchParams }: SignupPageProps) {
   const { error, next, notice } = await searchParams;
   const authContext = await getAuthenticatedAppUserContext();
   const nextPath = getSafeNextPath(next, "/me");
@@ -59,19 +59,27 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-300">
             Fantacalcetto
           </p>
-          <h1 className="mt-3 text-3xl font-bold">Login</h1>
+          <h1 className="mt-3 text-3xl font-bold">Registrazione</h1>
           <p className="mt-3 text-sm text-slate-300">
-            Accedi con Supabase Auth. Gli utenti normali entrano nell&apos;area
-            personale, mentre l&apos;area admin resta disponibile solo ai record
-            applicativi con ruolo ADMIN.
+            Crea un account utente normale. Il ruolo applicativo resta sempre USER.
           </p>
         </section>
 
         <Feedback error={error} notice={notice} />
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <form action={loginAction} className="space-y-4">
+          <form action={signupAction} className="space-y-4">
             <input type="hidden" name="next" value={nextPath} />
+
+            <label className="block space-y-2 text-sm text-slate-700">
+              <span className="font-medium">Nome visualizzato</span>
+              <input
+                type="text"
+                name="displayName"
+                autoComplete="name"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+              />
+            </label>
 
             <label className="block space-y-2 text-sm text-slate-700">
               <span className="font-medium">Email</span>
@@ -88,7 +96,17 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <input
                 type="password"
                 name="password"
-                autoComplete="current-password"
+                autoComplete="new-password"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+              />
+            </label>
+
+            <label className="block space-y-2 text-sm text-slate-700">
+              <span className="font-medium">Conferma password</span>
+              <input
+                type="password"
+                name="confirmPassword"
+                autoComplete="new-password"
                 className="w-full rounded-xl border border-slate-300 px-3 py-2"
               />
             </label>
@@ -97,22 +115,22 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               type="submit"
               className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-700"
             >
-              Accedi
+              Registrati
             </button>
           </form>
 
           <div className="mt-6 space-y-2 text-sm text-slate-600">
             <p>
-              Non hai un account?{" "}
+              Hai gia un account?{" "}
               <Link
-                href={`/signup?next=${encodeURIComponent(nextPath)}`}
+                href={`/login?next=${encodeURIComponent(nextPath)}`}
                 className="font-medium text-slate-900 underline"
               >
-                Registrati
+                Accedi
               </Link>
             </p>
             <p>
-              Password dimenticata?{" "}
+              Hai dimenticato la password?{" "}
               <Link
                 href={`/forgot-password?next=${encodeURIComponent(nextPath)}`}
                 className="font-medium text-slate-900 underline"
