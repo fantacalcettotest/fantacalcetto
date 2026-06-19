@@ -1,6 +1,16 @@
+import { MatchdayStatus, UserRole } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma.ts";
 import type { PlayerRoleFilter } from "@/lib/players/player-role.ts";
+import { validateLineupComposition } from "@/lib/server/lineups/validate-lineup-composition.ts";
 import { validateRosterComposition } from "@/lib/server/rosters/validate-roster-composition.ts";
+
+type AppUserAccessContext = {
+  appUser: {
+    id: string;
+    role: UserRole;
+  };
+};
 
 export async function getUserDashboardData(appUserId: string) {
   const user = await prisma.user.findUnique({
@@ -15,10 +25,35 @@ export async function getUserDashboardData(appUserId: string) {
         select: {
           id: true,
           name: true,
+          leagueId: true,
           league: {
             select: {
               id: true,
+              matchdays: {
+                where: {
+                  status: MatchdayStatus.LINEUPS_OPEN
+                },
+                orderBy: [{ number: "asc" }],
+                select: {
+                  id: true,
+                  number: true,
+                  status: true
+                }
+              },
               name: true
+            }
+          },
+          lineups: {
+            where: {
+              matchday: {
+                status: MatchdayStatus.LINEUPS_OPEN
+              }
+            },
+            select: {
+              id: true,
+              matchdayId: true,
+              status: true,
+              submittedAt: true
             }
           }
         }
@@ -83,6 +118,15 @@ export async function getUserDashboardData(appUserId: string) {
       left.name.localeCompare(right.name, "it")
     ),
     myTeam,
+    myTeamOpenMatchdays:
+      myTeam
+        ? myTeam.league.matchdays.map((matchday) => ({
+            ...matchday,
+            hasLineup: myTeam.lineups.some(
+              (lineup) => lineup.matchdayId === matchday.id
+            )
+          }))
+        : [],
     user
   };
 }
@@ -166,7 +210,32 @@ export async function getUserTeamPageData(teamId: string) {
       league: {
         select: {
           id: true,
+          matchdays: {
+            where: {
+              status: MatchdayStatus.LINEUPS_OPEN
+            },
+            orderBy: [{ number: "asc" }],
+            select: {
+              id: true,
+              lineupDeadlineAt: true,
+              number: true,
+              status: true
+            }
+          },
           name: true
+        }
+      },
+      lineups: {
+        where: {
+          matchday: {
+            status: MatchdayStatus.LINEUPS_OPEN
+          }
+        },
+        select: {
+          id: true,
+          matchdayId: true,
+          status: true,
+          submittedAt: true
         }
       },
       name: true,
@@ -234,6 +303,149 @@ export async function getUserTeamRosterPageData(
         role: entry.player.role
       }))
     ),
+    team
+  };
+}
+
+export async function getUserLineupPageData(
+  teamId: string,
+  matchdayId: string,
+  authContext: AppUserAccessContext
+) {
+  const team = await prisma.fantasyTeam.findUnique({
+    where: {
+      id: teamId
+    },
+    select: {
+      id: true,
+      league: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      leagueId: true,
+      name: true,
+      roster: {
+        orderBy: [{ player: { role: "asc" } }, { player: { name: "asc" } }],
+        select: {
+          id: true,
+          player: {
+            select: {
+              id: true,
+              name: true,
+              role: true,
+              source: true,
+              teamName: true
+            }
+          }
+        }
+      },
+      userId: true
+    }
+  });
+
+  if (!team) {
+    return null;
+  }
+
+  const canAccess =
+    authContext.appUser.role === UserRole.ADMIN ||
+    authContext.appUser.id === team.userId;
+
+  if (!canAccess) {
+    return {
+      accessDenied: true as const,
+      team
+    };
+  }
+
+  const matchday = await prisma.matchday.findUnique({
+    where: {
+      id: matchdayId
+    },
+    select: {
+      id: true,
+      leagueId: true,
+      lineupDeadlineAt: true,
+      number: true,
+      status: true
+    }
+  });
+
+  if (!matchday || matchday.leagueId !== team.leagueId) {
+    return null;
+  }
+
+  const existingLineup = await prisma.lineup.findUnique({
+    where: {
+      fantasyTeamId_matchdayId: {
+        fantasyTeamId: teamId,
+        matchdayId
+      }
+    },
+    select: {
+      id: true,
+      status: true,
+      submittedAt: true,
+      players: {
+        orderBy: [{ slotType: "asc" }, { positionOrder: "asc" }],
+        select: {
+          id: true,
+          playerId: true,
+          positionOrder: true,
+          slotType: true,
+          player: {
+            select: {
+              id: true,
+              name: true,
+              role: true,
+              source: true,
+              teamName: true
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const rosterValidation = validateRosterComposition(
+    team.roster.map((entry) => ({
+      role: entry.player.role
+    }))
+  );
+
+  const starterPlayers =
+    existingLineup?.players
+      .filter((entry) => entry.slotType === "STARTER")
+      .map((entry) => ({
+        id: entry.player.id,
+        role: entry.player.role
+      })) ?? [];
+  const benchPlayers =
+    existingLineup?.players
+      .filter((entry) => entry.slotType === "BENCH")
+      .map((entry) => ({
+        id: entry.player.id,
+        role: entry.player.role
+      })) ?? [];
+
+  return {
+    accessDenied: false as const,
+    existingLineup,
+    existingLineupValidation: existingLineup
+      ? validateLineupComposition(starterPlayers, benchPlayers)
+      : null,
+    league: team.league,
+    matchday,
+    rosterPlayers: team.roster.map((entry) => ({
+      id: entry.player.id,
+      name: entry.player.name,
+      role: entry.player.role,
+      source: entry.player.source,
+      teamName: entry.player.teamName
+    })),
+    rosterValidation,
     team
   };
 }

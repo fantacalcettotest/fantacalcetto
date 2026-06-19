@@ -1,6 +1,12 @@
 "use server";
 
-import { Prisma, UserRole } from "@prisma/client";
+import {
+  LineupStatus,
+  MatchdayStatus,
+  Prisma,
+  SlotType,
+  UserRole
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -8,6 +14,8 @@ import { requireAuthenticatedAppUser } from "@/lib/auth/app-user";
 import type { PlayerRoleFilter } from "@/lib/players/player-role.ts";
 import { parsePlayerRoleFilter } from "@/lib/players/player-role.ts";
 import { prisma } from "@/lib/prisma.ts";
+import { validateLineupComposition } from "@/lib/server/lineups/validate-lineup-composition";
+import { validateRosterComposition } from "@/lib/server/rosters/validate-roster-composition";
 import { createUserFantasyTeam } from "@/lib/server/teams/create-user-fantasy-team";
 
 function buildJoinLeagueRedirectPath(leagueId: string, error?: string) {
@@ -47,6 +55,30 @@ function buildRosterRedirectPath(
   return `/me/teams/${teamId}/roster?${searchParams.toString()}`;
 }
 
+function buildLineupRedirectPath(
+  teamId: string,
+  matchdayId: string,
+  options?: {
+    error?: string;
+    notice?: string;
+  }
+) {
+  const searchParams = new URLSearchParams();
+
+  if (options?.error) {
+    searchParams.set("error", options.error);
+  }
+
+  if (options?.notice) {
+    searchParams.set("notice", options.notice);
+  }
+
+  const search = searchParams.toString();
+  const pathname = `/me/teams/${teamId}/matchdays/${matchdayId}/lineup`;
+
+  return search.length > 0 ? `${pathname}?${search}` : pathname;
+}
+
 async function assertTeamOwnerOrAdmin(teamId: string) {
   const authContext = await requireAuthenticatedAppUser(`/me/teams/${teamId}`);
   const team = await prisma.fantasyTeam.findUnique({
@@ -78,6 +110,16 @@ function revalidateRosterPaths(teamId: string) {
   revalidatePath("/me");
   revalidatePath(`/me/teams/${teamId}`);
   revalidatePath(`/me/teams/${teamId}/roster`);
+}
+
+function revalidateLineupPaths(teamId: string, matchdayId: string, leagueId?: string) {
+  revalidatePath("/me");
+  revalidatePath(`/me/teams/${teamId}`);
+  revalidatePath(`/me/teams/${teamId}/matchdays/${matchdayId}/lineup`);
+
+  if (leagueId) {
+    revalidatePath(`/leagues/${leagueId}`);
+  }
 }
 
 export async function createFantasyTeamAction(formData: FormData) {
@@ -248,6 +290,255 @@ export async function removePlayerFromRosterAction(
           error instanceof Error
             ? error.message
             : "Impossibile rimuovere il giocatore dalla rosa."
+      })
+    );
+  }
+}
+
+type LineupSelection = "NONE" | "STARTER" | "BENCH";
+
+function parseLineupSelection(value: FormDataEntryValue | null): LineupSelection {
+  if (value === "STARTER" || value === "BENCH") {
+    return value;
+  }
+
+  return "NONE";
+}
+
+function parseBenchOrder(value: FormDataEntryValue | null) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  const parsedValue = Number.parseInt(value, 10);
+  return Number.isInteger(parsedValue) ? parsedValue : null;
+}
+
+export async function saveLineupAction(formData: FormData) {
+  const rawTeamId = formData.get("teamId");
+  const rawMatchdayId = formData.get("matchdayId");
+  const teamId = typeof rawTeamId === "string" ? rawTeamId : "";
+  const matchdayId = typeof rawMatchdayId === "string" ? rawMatchdayId : "";
+
+  if (teamId.length === 0 || matchdayId.length === 0) {
+    redirect("/me");
+  }
+
+  const team = await assertTeamOwnerOrAdmin(teamId);
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const fullTeam = await tx.fantasyTeam.findUnique({
+        where: {
+          id: team.id
+        },
+        select: {
+          id: true,
+          leagueId: true,
+          roster: {
+            orderBy: [{ player: { role: "asc" } }, { player: { name: "asc" } }],
+            select: {
+              playerId: true,
+              player: {
+                select: {
+                  id: true,
+                  name: true,
+                  role: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!fullTeam) {
+        throw new Error("Squadra non trovata.");
+      }
+
+      const matchday = await tx.matchday.findUnique({
+        where: {
+          id: matchdayId
+        },
+        select: {
+          id: true,
+          leagueId: true,
+          status: true
+        }
+      });
+
+      if (!matchday || matchday.leagueId !== fullTeam.leagueId) {
+        throw new Error("Giornata non valida per questa squadra.");
+      }
+
+      if (matchday.status !== MatchdayStatus.LINEUPS_OPEN) {
+        throw new Error("Formazioni chiuse.");
+      }
+
+      const rosterPlayerMap = new Map(
+        fullTeam.roster.map((entry) => [entry.player.id, entry.player])
+      );
+
+      const rosterPlayersForValidation = fullTeam.roster.map((entry) => ({
+        role: entry.player.role
+      }));
+      const rosterComposition = validateRosterComposition(rosterPlayersForValidation);
+
+      if (!rosterComposition.isValid) {
+        throw new Error("Completa prima la rosa.");
+      }
+
+      const starters: Array<{ id: string; role: (typeof fullTeam.roster)[number]["player"]["role"] }> =
+        [];
+      const benchSelections: Array<{
+        id: string;
+        order: number | null;
+        role: (typeof fullTeam.roster)[number]["player"]["role"];
+      }> = [];
+
+      for (const rosterEntry of fullTeam.roster) {
+        const selection = parseLineupSelection(
+          formData.get(`playerSelection:${rosterEntry.player.id}`)
+        );
+
+        if (selection === "STARTER") {
+          starters.push({
+            id: rosterEntry.player.id,
+            role: rosterEntry.player.role
+          });
+        }
+
+        if (selection === "BENCH") {
+          benchSelections.push({
+            id: rosterEntry.player.id,
+            order: parseBenchOrder(formData.get(`benchOrder:${rosterEntry.player.id}`)),
+            role: rosterEntry.player.role
+          });
+        }
+      }
+
+      if (benchSelections.some((entry) => entry.order === null)) {
+        throw new Error("Ogni panchinaro deve avere un ordine tra 1 e 3.");
+      }
+
+      const benchOrders = benchSelections.map((entry) => entry.order as number);
+      const sortedBenchOrders = [...benchOrders].sort((left, right) => left - right);
+      const hasValidBenchOrderSequence =
+        sortedBenchOrders.length === 3 &&
+        sortedBenchOrders[0] === 1 &&
+        sortedBenchOrders[1] === 2 &&
+        sortedBenchOrders[2] === 3;
+
+      if (!hasValidBenchOrderSequence) {
+        throw new Error("La panchina deve avere ordini unici 1, 2 e 3.");
+      }
+
+      const duplicateCheck = new Set<string>();
+      for (const player of [...starters, ...benchSelections]) {
+        if (!rosterPlayerMap.has(player.id)) {
+          throw new Error("Tutti i giocatori selezionati devono appartenere alla rosa.");
+        }
+
+        if (duplicateCheck.has(player.id)) {
+          throw new Error("Non puoi usare lo stesso giocatore due volte nella formazione.");
+        }
+
+        duplicateCheck.add(player.id);
+      }
+
+      const lineupValidation = validateLineupComposition(
+        starters,
+        benchSelections.map((entry) => ({
+          id: entry.id,
+          role: entry.role
+        }))
+      );
+
+      if (!lineupValidation.isValid) {
+        throw new Error(lineupValidation.errors[0] ?? "Formazione non valida.");
+      }
+
+      const existingLineup = await tx.lineup.findUnique({
+        where: {
+          fantasyTeamId_matchdayId: {
+            fantasyTeamId: fullTeam.id,
+            matchdayId: matchday.id
+          }
+        },
+        select: {
+          id: true
+        }
+      });
+
+      const lineup = existingLineup
+        ? await tx.lineup.update({
+            where: {
+              id: existingLineup.id
+            },
+            data: {
+              status: LineupStatus.SUBMITTED,
+              submittedAt: new Date()
+            },
+            select: {
+              id: true
+            }
+          })
+        : await tx.lineup.create({
+            data: {
+              fantasyTeamId: fullTeam.id,
+              matchdayId: matchday.id,
+              status: LineupStatus.SUBMITTED,
+              submittedAt: new Date()
+            },
+            select: {
+              id: true
+            }
+          });
+
+      await tx.lineupPlayer.deleteMany({
+        where: {
+          lineupId: lineup.id
+        }
+      });
+
+      const orderedBenchSelections = [...benchSelections].sort(
+        (left, right) => (left.order as number) - (right.order as number)
+      );
+
+      await tx.lineupPlayer.createMany({
+        data: [
+          ...starters.map((player, index) => ({
+            lineupId: lineup.id,
+            playerId: player.id,
+            positionOrder: index + 1,
+            slotType: SlotType.STARTER
+          })),
+          ...orderedBenchSelections.map((player) => ({
+            lineupId: lineup.id,
+            playerId: player.id,
+            positionOrder: player.order as number,
+            slotType: SlotType.BENCH
+          }))
+        ]
+      });
+
+      return {
+        leagueId: fullTeam.leagueId
+      };
+    });
+
+    revalidateLineupPaths(teamId, matchdayId, result.leagueId);
+    redirect(
+      buildLineupRedirectPath(teamId, matchdayId, {
+        notice: "Formazione salvata."
+      })
+    );
+  } catch (error) {
+    redirect(
+      buildLineupRedirectPath(teamId, matchdayId, {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Impossibile salvare la formazione."
       })
     );
   }

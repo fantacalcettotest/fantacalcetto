@@ -118,6 +118,66 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
         ) : null}
       </section>
 
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">Giornate aperte</h2>
+
+        {team.league.matchdays.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-600">
+            Nessuna giornata aperta al momento.
+          </p>
+        ) : (
+          <div className="mt-5 space-y-4">
+            {team.league.matchdays.map((matchday) => {
+              const existingLineup = team.lineups.find(
+                (lineup) => lineup.matchdayId === matchday.id
+              );
+
+              return (
+                <article
+                  key={matchday.id}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        Giornata #{matchday.number}
+                      </h3>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Stato: <strong>{matchday.status}</strong>
+                        {matchday.lineupDeadlineAt ? (
+                          <>
+                            {" "}
+                            | Deadline:{" "}
+                            <strong>
+                              {new Intl.DateTimeFormat("it-IT", {
+                                dateStyle: "medium",
+                                timeStyle: "short"
+                              }).format(matchday.lineupDeadlineAt)}
+                            </strong>
+                          </>
+                        ) : null}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {existingLineup
+                          ? "Formazione inserita"
+                          : "Formazione non ancora inserita"}
+                      </p>
+                    </div>
+
+                    <Link
+                      href={`/me/teams/${team.id}/matchdays/${matchday.id}/lineup`}
+                      className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                    >
+                      Schiera formazione
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       {team.roster.length === 0 ? (
         <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600 shadow-sm">
           La rosa non e ancora stata assegnata.
