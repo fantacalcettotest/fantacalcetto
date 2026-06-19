@@ -79,6 +79,13 @@ enum FantasyFixtureStatus {
   LOCKED
 }
 
+enum PlayerRole {
+  GOALKEEPER
+  DEFENDER
+  MIDFIELDER
+  ATTACKER
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -128,7 +135,10 @@ model LeagueMember {
 model Player {
   id               String               @id @default(cuid())
   name             String
+  role             PlayerRole           @default(MIDFIELDER)
   teamName         String?
+  externalId       String?
+  source           String?
   isActive         Boolean              @default(true)
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
@@ -137,6 +147,8 @@ model Player {
   requiredVotes    RequiredVotePlayer[]
   votes            PlayerVote[]
   teamScorePlayers TeamScorePlayer[]
+
+  @@unique([source, externalId])
 }
 
 model FantasyTeam {

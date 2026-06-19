@@ -1,4 +1,13 @@
-import { LeagueRole, LeagueStatus, LineupStatus, MatchdayStatus, PrismaClient, SlotType, UserRole } from "@prisma/client";
+import {
+  LeagueRole,
+  LeagueStatus,
+  LineupStatus,
+  MatchdayStatus,
+  PlayerRole,
+  PrismaClient,
+  SlotType,
+  UserRole
+} from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -102,6 +111,17 @@ const playerTeamNames = [
   "Polisportiva Etna"
 ] as const;
 
+const defaultRosterRoles = [
+  PlayerRole.GOALKEEPER,
+  PlayerRole.DEFENDER,
+  PlayerRole.DEFENDER,
+  PlayerRole.MIDFIELDER,
+  PlayerRole.MIDFIELDER,
+  PlayerRole.MIDFIELDER,
+  PlayerRole.ATTACKER,
+  PlayerRole.ATTACKER
+] as const;
+
 function uniquePlayerNames(): string[] {
   return demoTeams.flatMap((team) => team.playerNames);
 }
@@ -136,12 +156,17 @@ async function seedUsers() {
 
 async function seedPlayers() {
   const records = new Map<string, { id: string; name: string }>();
-  const names = uniquePlayerNames();
+  const players = demoTeams.flatMap((team) =>
+    team.playerNames.map((name, index) => ({
+      name,
+      role: defaultRosterRoles[index] ?? PlayerRole.MIDFIELDER
+    }))
+  );
 
-  for (const [index, name] of names.entries()) {
+  for (const [index, playerSeed] of players.entries()) {
     const teamName = playerTeamNames[index % playerTeamNames.length];
     const existingPlayer = await prisma.player.findFirst({
-      where: { name },
+      where: { name: playerSeed.name },
       select: {
         id: true,
         name: true
@@ -152,6 +177,7 @@ async function seedPlayers() {
       ? await prisma.player.update({
           where: { id: existingPlayer.id },
           data: {
+            role: playerSeed.role,
             teamName,
             isActive: true
           },
@@ -162,7 +188,8 @@ async function seedPlayers() {
         })
       : await prisma.player.create({
           data: {
-            name,
+            name: playerSeed.name,
+            role: playerSeed.role,
             teamName,
             isActive: true
           },
@@ -199,6 +226,7 @@ async function main() {
           status: LeagueStatus.ACTIVE,
           startersCount: 5,
           maxAutoSubs: 3,
+          maxTeams: 8,
           createdById: adminUser.id
         }
       })
@@ -208,6 +236,7 @@ async function main() {
           status: LeagueStatus.ACTIVE,
           startersCount: 5,
           maxAutoSubs: 3,
+          maxTeams: 8,
           createdById: adminUser.id
         }
       });
