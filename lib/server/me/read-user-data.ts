@@ -185,11 +185,19 @@ export async function getLeagueJoinPageData(leagueId: string, appUserId: string)
 }
 
 export async function getUserTeamPageData(teamId: string) {
-  return prisma.fantasyTeam.findUnique({
+  const team = await prisma.fantasyTeam.findUnique({
     where: {
       id: teamId
     },
     select: {
+      _count: {
+        select: {
+          awayFixtures: true,
+          homeFixtures: true,
+          lineups: true,
+          teamScores: true
+        }
+      },
       id: true,
       league: {
         select: {
@@ -209,6 +217,7 @@ export async function getUserTeamPageData(teamId: string) {
           name: true
         }
       },
+      leagueId: true,
       lineups: {
         where: {
           matchday: {
@@ -241,6 +250,22 @@ export async function getUserTeamPageData(teamId: string) {
       userId: true
     }
   });
+
+  if (!team) {
+    return null;
+  }
+
+  const hasParticipationHistory =
+    team._count.lineups > 0 ||
+    team._count.teamScores > 0 ||
+    team._count.homeFixtures > 0 ||
+    team._count.awayFixtures > 0;
+
+  return {
+    ...team,
+    canLeaveLeague: !hasParticipationHistory,
+    hasParticipationHistory
+  };
 }
 
 export async function getUserTeamRosterPageData(

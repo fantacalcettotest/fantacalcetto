@@ -35,10 +35,6 @@ export async function createLeague(
     throw new Error("maxTeams deve essere compreso tra 2 e 50.");
   }
 
-  if (input.maxTeams % 2 !== 0) {
-    throw new Error("maxTeams deve essere un numero pari.");
-  }
-
   const duplicateLeague = await prisma.league.findFirst({
     where: {
       name: {

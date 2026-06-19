@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { leaveLeagueAction } from "@/app/me/actions";
 import { getPlayerRoleLabel } from "@/lib/players/player-role";
 import { requireAuthenticatedAppUser } from "@/lib/auth/app-user";
 import { getUserTeamPageData } from "@/lib/server/me/read-user-data";
@@ -13,25 +14,35 @@ type TeamPageProps = {
     teamId: string;
   }>;
   searchParams: Promise<{
+    error?: string;
     notice?: string;
   }>;
 };
 
-function Feedback({ notice }: { notice?: string }) {
-  if (!notice) {
+function Feedback({ error, notice }: { error?: string; notice?: string }) {
+  if (!error && !notice) {
     return null;
   }
 
   return (
-    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-      {notice}
-    </div>
+    <>
+      {error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
+      {notice ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {notice}
+        </div>
+      ) : null}
+    </>
   );
 }
 
 export default async function TeamPage({ params, searchParams }: TeamPageProps) {
   const { teamId } = await params;
-  const { notice } = await searchParams;
+  const { error, notice } = await searchParams;
   const authContext = await requireAuthenticatedAppUser(`/me/teams/${teamId}`);
   const team = await getUserTeamPageData(teamId);
 
@@ -42,6 +53,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   const canAccess =
     authContext.appUser.role === "ADMIN" ||
     authContext.appUser.id === team.userId;
+  const isOwner = authContext.appUser.id === team.userId;
 
   if (!canAccess) {
     return (
@@ -64,7 +76,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 
   return (
     <div className="space-y-6">
-      <Feedback notice={notice} />
+      <Feedback error={error} notice={notice} />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -217,6 +229,49 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
           </div>
         </section>
       )}
+
+      {isOwner ? (
+        <section className="rounded-2xl border border-rose-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900">Abbandona lega</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Puoi abbandonare questa lega solo se la squadra non ha ancora
+            partecipato ad alcuna giornata.
+          </p>
+
+          {team.canLeaveLeague ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              L'operazione elimina la squadra e la rosa associata. Non verranno
+              toccate altre leghe.
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              Non puoi abbandonare questa lega perche la squadra ha gia
+              partecipato a una giornata.
+            </div>
+          )}
+
+          <form action={leaveLeagueAction.bind(null, team.id)} className="mt-5 space-y-4">
+            <label className="flex items-start gap-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                name="confirmLeaveLeague"
+                value="yes"
+                disabled={!team.canLeaveLeague}
+                className="mt-1 h-4 w-4 rounded border-slate-300"
+              />
+              <span>Confermo di voler abbandonare questa lega</span>
+            </label>
+
+            <button
+              type="submit"
+              disabled={!team.canLeaveLeague}
+              className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white transition enabled:hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-200"
+            >
+              Abbandona lega
+            </button>
+          </form>
+        </section>
+      ) : null}
     </div>
   );
 }

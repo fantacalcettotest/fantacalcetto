@@ -5,7 +5,26 @@ import { getUserDashboardData } from "@/lib/server/me/read-user-data";
 
 export const dynamic = "force-dynamic";
 
-export default async function MePage() {
+type MePageProps = {
+  searchParams: Promise<{
+    notice?: string;
+  }>;
+};
+
+function Feedback({ notice }: { notice?: string }) {
+  if (!notice) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+      {notice}
+    </div>
+  );
+}
+
+export default async function MePage({ searchParams }: MePageProps) {
+  const { notice } = await searchParams;
   const authContext = await requireAuthenticatedAppUser("/me");
   const data = await getUserDashboardData(authContext.appUser.id);
 
@@ -19,6 +38,8 @@ export default async function MePage() {
 
   return (
     <div className="space-y-6">
+      <Feedback notice={notice} />
+
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-2xl font-semibold text-slate-900">Profilo</h2>
         <p className="mt-2 text-sm text-slate-600">

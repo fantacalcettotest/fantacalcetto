@@ -54,14 +54,14 @@ export default async function NewLeaguePage({
               name="maxTeams"
               min={2}
               max={50}
-              step={2}
+              step={1}
               defaultValue={8}
               className="w-full rounded-xl border border-slate-300 px-3 py-2"
             />
           </label>
 
           <p className="text-sm text-slate-600">
-            Il numero massimo di squadre deve essere pari, minimo 2 e massimo 50.
+            Il numero massimo di squadre deve essere un intero, minimo 2 e massimo 50.
           </p>
 
           <div className="flex flex-wrap gap-3">

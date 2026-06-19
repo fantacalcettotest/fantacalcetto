@@ -31,6 +31,29 @@ function buildJoinLeagueRedirectPath(leagueId: string, error?: string) {
     : `/leagues/${leagueId}/join`;
 }
 
+function buildTeamRedirectPath(
+  teamId: string,
+  options?: {
+    error?: string;
+    notice?: string;
+  }
+) {
+  const searchParams = new URLSearchParams();
+
+  if (options?.error) {
+    searchParams.set("error", options.error);
+  }
+
+  if (options?.notice) {
+    searchParams.set("notice", options.notice);
+  }
+
+  const search = searchParams.toString();
+  const pathname = `/me/teams/${teamId}`;
+
+  return search.length > 0 ? `${pathname}?${search}` : pathname;
+}
+
 function buildRosterRedirectPath(
   teamId: string,
   roleFilter?: string | null,
@@ -157,6 +180,100 @@ export async function createFantasyTeamAction(formData: FormData) {
           ? error.message
           : "Impossibile creare la squadra fantasy."
       )
+    );
+  }
+}
+
+export async function leaveLeagueAction(teamId: string, formData: FormData) {
+  const authContext = await requireAuthenticatedAppUser(`/me/teams/${teamId}`);
+  const confirmation = formData.get("confirmLeaveLeague");
+
+  if (confirmation !== "yes") {
+    redirect(
+      buildTeamRedirectPath(teamId, {
+        error: "Devi confermare l'abbandono della lega."
+      })
+    );
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const team = await tx.fantasyTeam.findUnique({
+        where: {
+          id: teamId
+        },
+        select: {
+          _count: {
+            select: {
+              awayFixtures: true,
+              homeFixtures: true,
+              lineups: true,
+              teamScores: true
+            }
+          },
+          id: true,
+          leagueId: true,
+          userId: true
+        }
+      });
+
+      if (!team) {
+        throw new Error("Squadra non trovata.");
+      }
+
+      if (team.userId !== authContext.appUser.id) {
+        throw new Error("Accesso non autorizzato.");
+      }
+
+      const hasParticipationHistory =
+        team._count.lineups > 0 ||
+        team._count.teamScores > 0 ||
+        team._count.homeFixtures > 0 ||
+        team._count.awayFixtures > 0;
+
+      if (hasParticipationHistory) {
+        throw new Error(
+          "Non puoi abbandonare questa lega perche la squadra ha gia partecipato a una giornata."
+        );
+      }
+
+      await tx.fantasyRoster.deleteMany({
+        where: {
+          fantasyTeamId: team.id
+        }
+      });
+
+      await tx.leagueMember.deleteMany({
+        where: {
+          leagueId: team.leagueId,
+          userId: team.userId
+        }
+      });
+
+      await tx.fantasyTeam.delete({
+        where: {
+          id: team.id
+        }
+      });
+
+      return {
+        leagueId: team.leagueId
+      };
+    });
+
+    revalidatePath("/me");
+    revalidatePath(`/leagues/${result.leagueId}`);
+    revalidatePath(`/leagues/${result.leagueId}/join`);
+
+    redirect("/me?notice=Hai%20abbandonato%20la%20lega.");
+  } catch (error) {
+    redirect(
+      buildTeamRedirectPath(teamId, {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Impossibile abbandonare la lega."
+      })
     );
   }
 }
