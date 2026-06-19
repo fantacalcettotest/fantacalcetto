@@ -305,14 +305,16 @@ export default async function TeamMatchdayLineupPage({
               <tbody className="divide-y divide-slate-100">
                 {data.rosterPlayers.map((player) => {
                   const selection = existingSelections.get(player.id);
+                  const isUnavailable =
+                    player.isBlockedInLeague || !player.isActive;
 
                   return (
                     <tr key={player.id}>
                       <td className="px-3 py-2 text-slate-900">
                         {player.name}
-                        {player.isBlockedInLeague ? (
+                        {isUnavailable ? (
                           <span className="ml-2 inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">
-                            Non disponibile in questa lega
+                            Non disponibile
                           </span>
                         ) : null}
                       </td>

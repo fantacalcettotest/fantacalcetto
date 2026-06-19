@@ -259,6 +259,7 @@ export async function getUserTeamPageData(teamId: string) {
           player: {
             select: {
               id: true,
+              isActive: true,
               name: true,
               role: true,
               source: true,
@@ -367,6 +368,7 @@ export async function getUserTeamRosterPageData(
     rosterValidation: validateRosterComposition(
       team.roster.map((entry) => ({
         isBlockedInLeague: entry.player.isBlockedInLeague,
+        isGloballyInactive: !entry.player.isActive,
         role: entry.player.role
       }))
     ),
@@ -400,6 +402,7 @@ export async function getUserLineupPageData(
           player: {
             select: {
               id: true,
+              isActive: true,
               name: true,
               role: true,
               source: true,
@@ -483,6 +486,7 @@ export async function getUserLineupPageData(
   const rosterValidation = validateRosterComposition(
     team.roster.map((entry) => ({
       isBlockedInLeague: blockedPlayerIds.has(entry.player.id),
+      isGloballyInactive: !entry.player.isActive,
       role: entry.player.role
     }))
   );
@@ -512,6 +516,7 @@ export async function getUserLineupPageData(
     matchday,
     rosterPlayers: team.roster.map((entry) => ({
       id: entry.player.id,
+      isActive: entry.player.isActive,
       isBlockedInLeague: blockedPlayerIds.has(entry.player.id),
       name: entry.player.name,
       role: entry.player.role,

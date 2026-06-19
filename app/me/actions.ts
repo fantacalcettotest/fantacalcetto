@@ -109,13 +109,37 @@ function buildLineupRedirectPath(
 }
 
 async function assertTeamOwnerOrAdmin(teamId: string) {
+  return requireOwnedFantasyTeam(teamId);
+}
+
+async function requireOwnedFantasyTeam(
+  teamId: string,
+  options?: {
+    allowAdmin?: boolean;
+  }
+) {
   const authContext = await requireAuthenticatedAppUser(`/me/teams/${teamId}`);
+  const allowAdmin = options?.allowAdmin ?? true;
   const team = await prisma.fantasyTeam.findUnique({
     where: {
       id: teamId
     },
     select: {
       id: true,
+      league: {
+        select: {
+          members: {
+            select: {
+              id: true
+            },
+            take: 1,
+            where: {
+              userId: authContext.appUser.id
+            }
+          }
+        }
+      },
+      leagueId: true,
       userId: true
     }
   });
@@ -125,14 +149,50 @@ async function assertTeamOwnerOrAdmin(teamId: string) {
   }
 
   const canAccess =
-    authContext.appUser.role === UserRole.ADMIN ||
+    (allowAdmin && authContext.appUser.role === UserRole.ADMIN) ||
     authContext.appUser.id === team.userId;
 
   if (!canAccess) {
-    throw new Error("Accesso non autorizzato.");
+    throw new Error("Non autorizzato.");
   }
 
-  return team;
+  const isAdmin = authContext.appUser.role === UserRole.ADMIN;
+
+  if (!isAdmin && team.league.members.length === 0) {
+    throw new Error("Non autorizzato.");
+  }
+
+  return {
+    appUserId: authContext.appUser.id,
+    isAdmin,
+    team: {
+      id: team.id,
+      leagueId: team.leagueId,
+      userId: team.userId
+    }
+  };
+}
+
+async function assertLeagueMemberInTransaction(
+  tx: Prisma.TransactionClient,
+  leagueId: string,
+  userId: string
+) {
+  const membership = await tx.leagueMember.findUnique({
+    where: {
+      leagueId_userId: {
+        leagueId,
+        userId
+      }
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (!membership) {
+    throw new Error("Non autorizzato.");
+  }
 }
 
 function revalidateRosterPaths(teamId: string) {
@@ -191,7 +251,7 @@ export async function createFantasyTeamAction(formData: FormData) {
 }
 
 export async function leaveLeagueAction(teamId: string, formData: FormData) {
-  const authContext = await requireAuthenticatedAppUser(`/me/teams/${teamId}`);
+  const access = await requireOwnedFantasyTeam(teamId, { allowAdmin: false });
   const confirmation = formData.get("confirmLeaveLeague");
 
   if (confirmation !== "yes") {
@@ -227,9 +287,11 @@ export async function leaveLeagueAction(teamId: string, formData: FormData) {
         throw new Error("Squadra non trovata.");
       }
 
-      if (team.userId !== authContext.appUser.id) {
-        throw new Error("Accesso non autorizzato.");
+      if (team.userId !== access.appUserId) {
+        throw new Error("Non autorizzato.");
       }
+
+      await assertLeagueMemberInTransaction(tx, team.leagueId, access.appUserId);
 
       if (await hasLeagueScheduleGeneratedWithDb(tx, team.leagueId)) {
         throw new Error(
@@ -297,13 +359,13 @@ export async function addPlayerToRosterAction(
   currentSearchQuery: string | undefined,
   _formData: FormData
 ) {
-  const team = await assertTeamOwnerOrAdmin(teamId);
+  const access = await assertTeamOwnerOrAdmin(teamId);
 
   try {
     await prisma.$transaction(async (tx) => {
       const fullTeam = await tx.fantasyTeam.findUnique({
         where: {
-          id: team.id
+          id: access.team.id
         },
         select: {
           id: true,
@@ -319,6 +381,10 @@ export async function addPlayerToRosterAction(
 
       if (!fullTeam) {
         throw new Error("Squadra non trovata.");
+      }
+
+      if (!access.isAdmin) {
+        await assertLeagueMemberInTransaction(tx, fullTeam.leagueId, access.appUserId);
       }
 
       const player = await tx.player.findUnique({
@@ -398,14 +464,18 @@ export async function removePlayerFromRosterAction(
   currentSearchQuery: string | undefined,
   _formData: FormData
 ) {
-  const team = await assertTeamOwnerOrAdmin(teamId);
+  const access = await assertTeamOwnerOrAdmin(teamId);
 
   try {
     await prisma.$transaction(async (tx) => {
+      if (!access.isAdmin) {
+        await assertLeagueMemberInTransaction(tx, access.team.leagueId, access.appUserId);
+      }
+
       const rosterEntry = await tx.fantasyRoster.findUnique({
         where: {
           fantasyTeamId_playerId: {
-            fantasyTeamId: team.id,
+            fantasyTeamId: access.team.id,
             playerId
           }
         },
@@ -472,13 +542,13 @@ export async function saveLineupAction(formData: FormData) {
     redirect("/me");
   }
 
-  const team = await assertTeamOwnerOrAdmin(teamId);
+  const access = await assertTeamOwnerOrAdmin(teamId);
 
   try {
     const result = await prisma.$transaction(async (tx) => {
       const fullTeam = await tx.fantasyTeam.findUnique({
         where: {
-          id: team.id
+          id: access.team.id
         },
         select: {
           id: true,
@@ -490,6 +560,7 @@ export async function saveLineupAction(formData: FormData) {
               player: {
                 select: {
                   id: true,
+                  isActive: true,
                   name: true,
                   role: true
                 }
@@ -501,6 +572,10 @@ export async function saveLineupAction(formData: FormData) {
 
       if (!fullTeam) {
         throw new Error("Squadra non trovata.");
+      }
+
+      if (!access.isAdmin) {
+        await assertLeagueMemberInTransaction(tx, fullTeam.leagueId, access.appUserId);
       }
 
       const matchday = await tx.matchday.findUnique({
@@ -519,17 +594,13 @@ export async function saveLineupAction(formData: FormData) {
       }
 
       if (matchday.status !== MatchdayStatus.LINEUPS_OPEN) {
-        throw new Error("Formazioni chiuse.");
+        throw new Error("Giornata non modificabile.");
       }
 
       const rosterPlayerMap = new Map(
         fullTeam.roster.map((entry) => [entry.player.id, entry.player])
       );
 
-      const rosterPlayersForValidation = fullTeam.roster.map((entry) => ({
-        isBlockedInLeague: false,
-        role: entry.player.role
-      }));
       const blockedRosterPlayers = await tx.leagueBlockedPlayer.findMany({
         where: {
           leagueId: fullTeam.leagueId,
@@ -547,13 +618,14 @@ export async function saveLineupAction(formData: FormData) {
       const rosterComposition = validateRosterComposition(
         fullTeam.roster.map((entry) => ({
           isBlockedInLeague: blockedRosterPlayerIds.has(entry.player.id),
+          isGloballyInactive: !entry.player.isActive,
           role: entry.player.role
         }))
       );
 
       if (!rosterComposition.isValid) {
         if (rosterComposition.blockedCount > 0) {
-          throw new Error("Uno o piu giocatori non sono disponibili in questa lega.");
+          throw new Error("Uno o piu giocatori non sono disponibili.");
         }
 
         throw new Error("Completa prima la rosa.");
@@ -630,7 +702,16 @@ export async function saveLineupAction(formData: FormData) {
       });
 
       if (selectedBlockedPlayers.length > 0) {
-        throw new Error("Uno o piu giocatori non sono disponibili in questa lega.");
+        throw new Error("Uno o piu giocatori non sono disponibili.");
+      }
+
+      const selectedInactivePlayers = [...duplicateCheck].filter((playerId) => {
+        const rosterPlayer = rosterPlayerMap.get(playerId);
+        return rosterPlayer ? !rosterPlayer.isActive : false;
+      });
+
+      if (selectedInactivePlayers.length > 0) {
+        throw new Error("Uno o piu giocatori non sono disponibili.");
       }
 
       const lineupValidation = validateLineupComposition(
