@@ -352,12 +352,18 @@ export async function getAdminLeagueMatchdayCreationData(leagueId: string) {
 }
 
 export async function getAdminMatchdayDetailData(matchdayId: string) {
-  return prisma.matchday.findUnique({
+  const matchday = await prisma.matchday.findUnique({
     where: {
       id: matchdayId
     },
     select: {
       id: true,
+      fixtures: {
+        select: {
+          id: true,
+          status: true
+        }
+      },
       league: {
         select: {
           id: true,
@@ -371,9 +377,16 @@ export async function getAdminMatchdayDetailData(matchdayId: string) {
       },
       lineupDeadlineAt: true,
       number: true,
+      requiredVotes: {
+        select: {
+          id: true,
+          status: true
+        }
+      },
       status: true,
       _count: {
         select: {
+          fixtures: true,
           lineups: true,
           playerVotes: true,
           requiredVotes: true,
@@ -382,4 +395,31 @@ export async function getAdminMatchdayDetailData(matchdayId: string) {
       }
     }
   });
+
+  if (!matchday) {
+    return null;
+  }
+
+  const completedVotesCount = matchday.requiredVotes.filter(
+    (requiredVote) => requiredVote.status !== "PENDING"
+  ).length;
+  const missingVotesCount = matchday.requiredVotes.length - completedVotesCount;
+  const hasCalculatedFixtures = matchday.fixtures.some(
+    (fixture) => fixture.status === "CALCULATED"
+  );
+  const hasPublishedFixtures = matchday.fixtures.some(
+    (fixture) => fixture.status === "PUBLISHED"
+  );
+  const hasScheduledFixtures = matchday.fixtures.some(
+    (fixture) => fixture.status === "SCHEDULED"
+  );
+
+  return {
+    ...matchday,
+    completedVotesCount,
+    hasCalculatedFixtures,
+    hasPublishedFixtures,
+    hasScheduledFixtures,
+    missingVotesCount
+  };
 }

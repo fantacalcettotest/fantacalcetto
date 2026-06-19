@@ -2,7 +2,15 @@ import { MatchdayStatus } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { lockLineupsAction, openLineupsAction } from "@/app/admin/actions";
+import {
+  calculateFantasyFixtureResultsAction,
+  calculateMatchdayScoresAction,
+  generateFantasyFixturesAction,
+  generateRequiredVotePlayersAction,
+  lockLineupsAction,
+  openLineupsAction,
+  publishMatchdayAction
+} from "@/app/admin/actions";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { getAdminMatchdayDetailData } from "@/lib/server/admin/read-admin-data";
@@ -45,9 +53,21 @@ function Feedback({
 
 function canShowPostLineupLinks(status: MatchdayStatus) {
   return (
-    status !== MatchdayStatus.DRAFT &&
-    status !== MatchdayStatus.LINEUPS_OPEN
+    status === MatchdayStatus.LINEUPS_LOCKED ||
+    status === MatchdayStatus.VOTES_PENDING ||
+    status === MatchdayStatus.VOTES_COMPLETED ||
+    status === MatchdayStatus.SCORES_CALCULATED
   );
+}
+
+function ActionForm({
+  action,
+  children
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+  children: React.ReactNode;
+}) {
+  return <form action={action}>{children}</form>;
 }
 
 export default async function AdminMatchdayDetailPage({
@@ -64,6 +84,15 @@ export default async function AdminMatchdayDetailPage({
 
   const openAction = openLineupsAction.bind(null, matchday.id);
   const closeAction = lockLineupsAction.bind(null, matchday.id);
+  const redirectPath = `/admin/matchdays/${matchday.id}`;
+  const hasFixtures = matchday._count.fixtures > 0;
+  const hasRequiredVotes = matchday._count.requiredVotes > 0;
+  const canCalculateScores =
+    matchday.status === MatchdayStatus.VOTES_COMPLETED;
+  const canPublish = matchday.status === MatchdayStatus.SCORES_CALCULATED;
+  const canGenerateFixtureResults =
+    matchday.status === MatchdayStatus.SCORES_CALCULATED && hasFixtures;
+  const publicMatchdayPath = `/leagues/${matchday.league.id}/matchdays/${matchday.id}`;
 
   return (
     <AdminShell
@@ -82,6 +111,15 @@ export default async function AdminMatchdayDetailPage({
               Numero giornata: <strong>{matchday.number}</strong> | Squadre lega:{" "}
               <strong>{matchday.league._count.fantasyTeams}</strong> | Formazioni
               inserite: <strong>{matchday._count.lineups}</strong>
+            </p>
+            <p className="mt-2 text-sm text-slate-600">
+              Fixture generate: <strong>{matchday._count.fixtures}</strong> | Voti
+              richiesti: <strong>{matchday._count.requiredVotes}</strong>
+            </p>
+            <p className="mt-2 text-sm text-slate-600">
+              Voti completati: <strong>{matchday.completedVotesCount}</strong> |
+              Mancanti: <strong>{matchday.missingVotesCount}</strong> | Team score
+              calcolati: <strong>{matchday._count.teamScores}</strong>
             </p>
             <p className="mt-2 text-sm text-slate-600">
               Giocatori utili: <strong>{matchday._count.requiredVotes}</strong> | Voti
@@ -120,20 +158,163 @@ export default async function AdminMatchdayDetailPage({
             </form>
           ) : null}
 
-          {canShowPostLineupLinks(matchday.status) ? (
+          {matchday.status === MatchdayStatus.LINEUPS_LOCKED ? (
             <>
-              <Link
-                href={`/admin/matchdays/${matchday.id}/votes`}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+              {!hasFixtures ? (
+                <ActionForm action={generateFantasyFixturesAction}>
+                  <input type="hidden" name="leagueId" value={matchday.league.id} />
+                  <input type="hidden" name="matchdayId" value={matchday.id} />
+                  <input type="hidden" name="redirectPath" value={redirectPath} />
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                  >
+                    Genera scontri giornata
+                  </button>
+                </ActionForm>
+              ) : null}
+
+              <ActionForm action={generateRequiredVotePlayersAction}>
+                <input type="hidden" name="leagueId" value={matchday.league.id} />
+                <input type="hidden" name="matchdayId" value={matchday.id} />
+                <input type="hidden" name="redirectPath" value={redirectPath} />
+                <button
+                  type="submit"
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                >
+                  Genera lista voti richiesti
+                </button>
+              </ActionForm>
+            </>
+          ) : null}
+
+          {matchday.status === MatchdayStatus.VOTES_PENDING ? (
+            <Link
+              href={`/admin/matchdays/${matchday.id}/votes`}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+            >
+              Inserisci voti
+            </Link>
+          ) : null}
+
+          {matchday.status === MatchdayStatus.VOTES_COMPLETED ? (
+            <ActionForm action={calculateMatchdayScoresAction}>
+              <input type="hidden" name="leagueId" value={matchday.league.id} />
+              <input type="hidden" name="matchdayId" value={matchday.id} />
+              <input type="hidden" name="redirectPath" value={redirectPath} />
+              <button
+                type="submit"
+                disabled={!canCalculateScores}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
-                Gestisci voti
-              </Link>
+                Calcola punteggi squadre
+              </button>
+            </ActionForm>
+          ) : null}
+
+          {matchday.status === MatchdayStatus.SCORES_CALCULATED ? (
+            <>
+              {hasFixtures ? (
+                <ActionForm action={calculateFantasyFixtureResultsAction}>
+                  <input type="hidden" name="leagueId" value={matchday.league.id} />
+                  <input type="hidden" name="matchdayId" value={matchday.id} />
+                  <input type="hidden" name="redirectPath" value={redirectPath} />
+                  <button
+                    type="submit"
+                    disabled={!canGenerateFixtureResults}
+                    className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition enabled:hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-200"
+                  >
+                    Genera/aggiorna risultati scontri
+                  </button>
+                </ActionForm>
+              ) : null}
+
               <Link
                 href={`/admin/matchdays/${matchday.id}/scores`}
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
               >
                 Vedi punteggi
               </Link>
+
+              <ActionForm action={publishMatchdayAction}>
+                <input type="hidden" name="leagueId" value={matchday.league.id} />
+                <input type="hidden" name="matchdayId" value={matchday.id} />
+                <input type="hidden" name="redirectPath" value={redirectPath} />
+                <button
+                  type="submit"
+                  disabled={!canPublish}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition enabled:hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-200"
+                >
+                  Pubblica giornata
+                </button>
+              </ActionForm>
+            </>
+          ) : null}
+
+          {matchday.status === MatchdayStatus.PUBLISHED ? (
+            <>
+              <Link
+                href={publicMatchdayPath}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+              >
+                Pagina pubblica giornata
+              </Link>
+              <Link
+                href={`/admin/leagues/${matchday.league.id}/standings`}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+              >
+                Classifica
+              </Link>
+              <Link
+                href={`/admin/matchdays/${matchday.id}/scores`}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+              >
+                Punteggi
+              </Link>
+            </>
+          ) : null}
+
+          {matchday.status === MatchdayStatus.LOCKED ? (
+            <>
+              <Link
+                href={publicMatchdayPath}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+              >
+                Pagina pubblica giornata
+              </Link>
+              <Link
+                href={`/admin/leagues/${matchday.league.id}/standings`}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+              >
+                Classifica
+              </Link>
+              <Link
+                href={`/admin/matchdays/${matchday.id}/scores`}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+              >
+                Punteggi
+              </Link>
+            </>
+          ) : null}
+
+          {canShowPostLineupLinks(matchday.status) ? (
+            <>
+              {hasRequiredVotes ? (
+                <Link
+                  href={`/admin/matchdays/${matchday.id}/votes`}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                >
+                  Gestisci voti
+                </Link>
+              ) : null}
+              {matchday._count.teamScores > 0 ? (
+                <Link
+                  href={`/admin/matchdays/${matchday.id}/scores`}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                >
+                  Vedi punteggi
+                </Link>
+              ) : null}
             </>
           ) : null}
 
@@ -145,9 +326,34 @@ export default async function AdminMatchdayDetailPage({
           </Link>
         </div>
 
+        {matchday.status === MatchdayStatus.LINEUPS_LOCKED && hasFixtures ? (
+          <p className="mt-4 text-sm text-slate-600">
+            Gli scontri della giornata sono gia presenti. Puoi rigenerare la lista dei
+            voti richiesti e poi passare all&apos;inserimento voti.
+          </p>
+        ) : null}
+
+        {matchday.status === MatchdayStatus.SCORES_CALCULATED && !hasFixtures ? (
+          <p className="mt-4 text-sm text-amber-700">
+            Genera prima gli scontri della giornata.
+          </p>
+        ) : null}
+
+        {matchday.status === MatchdayStatus.VOTES_PENDING && !hasRequiredVotes ? (
+          <p className="mt-4 text-sm text-amber-700">
+            Genera prima la lista dei voti richiesti.
+          </p>
+        ) : null}
+
         {matchday.status === MatchdayStatus.LINEUPS_LOCKED ? (
           <p className="mt-4 text-sm text-slate-600">
             Le formazioni sono chiuse. Da qui puoi proseguire con voti e punteggi.
+          </p>
+        ) : null}
+
+        {matchday.status === MatchdayStatus.LOCKED ? (
+          <p className="mt-4 text-sm text-slate-600">
+            Giornata bloccata: nessuna ulteriore operazione disponibile.
           </p>
         ) : null}
       </section>
