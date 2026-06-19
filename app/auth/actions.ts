@@ -1,38 +1,35 @@
 "use server";
 
-import { UserRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
-import { prisma } from "@/lib/prisma.ts";
+import {
+  buildLoginPath,
+  ensureAppUserForAuthUser,
+  getSafeNextPath
+} from "@/lib/auth/app-user";
 import { createSupabaseServerClient } from "@/lib/supabase/server.ts";
 
 function redirectToLogin(
-  options?: { error?: string; notice?: string }
+  options?: { error?: string; next?: string; notice?: string }
 ): never {
-  const searchParams = new URLSearchParams();
-
-  if (options?.error) {
-    searchParams.set("error", options.error);
-  }
-
-  if (options?.notice) {
-    searchParams.set("notice", options.notice);
-  }
-
-  const search = searchParams.toString();
-  redirect(search.length > 0 ? `/login?${search}` : "/login");
+  redirect(buildLoginPath(options));
 }
 
 export async function loginAction(formData: FormData) {
   const rawEmail = formData.get("email");
   const rawPassword = formData.get("password");
+  const rawNext = formData.get("next");
+  const nextPath = getSafeNextPath(
+    typeof rawNext === "string" ? rawNext : undefined,
+    "/me"
+  );
 
   if (typeof rawEmail !== "string" || rawEmail.trim().length === 0) {
-    redirectToLogin({ error: "Email obbligatoria." });
+    redirectToLogin({ error: "Email obbligatoria.", next: nextPath });
   }
 
   if (typeof rawPassword !== "string" || rawPassword.length === 0) {
-    redirectToLogin({ error: "Password obbligatoria." });
+    redirectToLogin({ error: "Password obbligatoria.", next: nextPath });
   }
 
   const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
@@ -45,7 +42,7 @@ export async function loginAction(formData: FormData) {
   });
 
   if (error) {
-    redirectToLogin({ error: "Credenziali non valide." });
+    redirectToLogin({ error: "Credenziali non valide.", next: nextPath });
   }
 
   const {
@@ -55,26 +52,26 @@ export async function loginAction(formData: FormData) {
 
   if (getUserError || !user) {
     await supabase.auth.signOut();
-    redirectToLogin({ error: "Sessione non disponibile dopo il login." });
+    redirectToLogin({
+      error: "Sessione non disponibile dopo il login.",
+      next: nextPath
+    });
   }
 
-  const currentUser = user;
-
-  const appUser = await prisma.user.findUnique({
-    where: {
-      authUserId: currentUser.id
-    },
-    select: {
-      role: true
-    }
-  });
-
-  if (!appUser || appUser.role !== UserRole.ADMIN) {
+  try {
+    await ensureAppUserForAuthUser(user);
+  } catch (caughtError) {
     await supabase.auth.signOut();
-    redirectToLogin({ error: "Accesso non autorizzato" });
+    redirectToLogin({
+      error:
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Impossibile collegare l'utente applicativo.",
+      next: nextPath
+    });
   }
 
-  redirect("/admin");
+  redirect(nextPath);
 }
 
 export async function logoutAction() {

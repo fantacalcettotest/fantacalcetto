@@ -1,13 +1,17 @@
 import { redirect } from "next/navigation";
 
 import { loginAction, logoutAction } from "@/app/auth/actions";
-import { getAuthenticatedAdminContext } from "@/lib/auth/admin.ts";
+import {
+  getAuthenticatedAppUserContext,
+  getSafeNextPath
+} from "@/lib/auth/app-user";
 
 export const dynamic = "force-dynamic";
 
 type LoginPageProps = {
   searchParams: Promise<{
     error?: string;
+    next?: string;
     notice?: string;
   }>;
 };
@@ -37,11 +41,12 @@ function Feedback({
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { error, notice } = await searchParams;
-  const authContext = await getAuthenticatedAdminContext();
+  const { error, next, notice } = await searchParams;
+  const authContext = await getAuthenticatedAppUserContext();
+  const nextPath = getSafeNextPath(next, "/me");
 
-  if (authContext?.appUser?.role === "ADMIN") {
-    redirect("/admin");
+  if (authContext?.appUser) {
+    redirect(nextPath);
   }
 
   const hasAuthenticatedButUnauthorizedUser = Boolean(authContext?.authUser);
@@ -53,10 +58,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-300">
             Fantacalcetto
           </p>
-          <h1 className="mt-3 text-3xl font-bold">Login admin</h1>
+          <h1 className="mt-3 text-3xl font-bold">Login</h1>
           <p className="mt-3 text-sm text-slate-300">
-            Accedi con Supabase Auth. L&apos;area admin è disponibile solo per
-            utenti collegati a un record applicativo con ruolo ADMIN.
+            Accedi con Supabase Auth. Gli utenti normali entrano nell&apos;area
+            personale, mentre l&apos;area admin resta disponibile solo ai record
+            applicativi con ruolo ADMIN.
           </p>
         </section>
 
@@ -64,6 +70,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <form action={loginAction} className="space-y-4">
+            <input type="hidden" name="next" value={nextPath} />
+
             <label className="block space-y-2 text-sm text-slate-700">
               <span className="font-medium">Email</span>
               <input
@@ -95,9 +103,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           {hasAuthenticatedButUnauthorizedUser ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               <p>
-                Esiste una sessione autenticata, ma l&apos;utente non è collegato
-                a un admin applicativo.
+                Esiste una sessione autenticata, ma l&apos;utente non e collegato
+                correttamente a un profilo applicativo utilizzabile.
               </p>
+              {authContext?.error ? <p className="mt-2">{authContext.error}</p> : null}
               <form action={logoutAction} className="mt-3">
                 <button
                   type="submit"

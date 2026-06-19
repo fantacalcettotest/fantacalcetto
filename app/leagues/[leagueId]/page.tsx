@@ -50,6 +50,15 @@ export default async function PublicLeaguePage({
           </Link>
         </div>
 
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link
+            href={`/leagues/${data.league.id}/join`}
+            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
+          >
+            Entra nella lega / Crea la tua squadra
+          </Link>
+        </div>
+
         {data.league.publishedMatchdaysCount === 0 ? (
           <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
             Nessuna giornata pubblicata disponibile per questa lega.

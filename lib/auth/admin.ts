@@ -1,72 +1,28 @@
 import { UserRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
-import { prisma } from "@/lib/prisma.ts";
-import { createSupabaseServerClient } from "@/lib/supabase/server.ts";
-
-function buildLoginPath(message: string) {
-  const searchParams = new URLSearchParams({ error: message });
-  return `/login?${searchParams.toString()}`;
-}
-
-export async function findAppUserByAuthUserId(authUserId: string) {
-  return prisma.user.findUnique({
-    where: {
-      authUserId
-    },
-    select: {
-      authUserId: true,
-      displayName: true,
-      email: true,
-      id: true,
-      role: true
-    }
-  });
-}
+import {
+  buildLoginPath,
+  getAuthenticatedAppUserContext,
+  requireAuthenticatedAppUser
+} from "./app-user";
 
 export async function requireAdminAccess() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
+  const authContext = await requireAuthenticatedAppUser("/admin");
 
-  if (error || !user) {
-    redirect("/login");
+  if (authContext.appUser.role !== UserRole.ADMIN) {
+    redirect(buildLoginPath({ error: "Accesso non autorizzato" }));
   }
 
-  const appUser = await findAppUserByAuthUserId(user.id);
-  if (!appUser || appUser.role !== UserRole.ADMIN) {
-    redirect(buildLoginPath("Accesso non autorizzato"));
-  }
-
-  return {
-    appUser,
-    authUser: user
-  };
+  return authContext;
 }
 
 export async function getAuthenticatedAdminContext() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
+  const authContext = await getAuthenticatedAppUserContext();
 
-  if (error || !user) {
+  if (!authContext) {
     return null;
   }
 
-  const appUser = await findAppUserByAuthUserId(user.id);
-  if (!appUser || appUser.role !== UserRole.ADMIN) {
-    return {
-      appUser,
-      authUser: user
-    };
-  }
-
-  return {
-    appUser,
-    authUser: user
-  };
+  return authContext;
 }
