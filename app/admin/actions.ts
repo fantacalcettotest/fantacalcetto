@@ -8,6 +8,7 @@ import { requireAdminAccess } from "@/lib/auth/admin.ts";
 import { prisma } from "@/lib/prisma.ts";
 import { calculateFantavote } from "@/lib/scoring/calculate-fantavote.ts";
 import { createLeague } from "@/lib/server/admin/create-league.ts";
+import { resetLeagueData } from "@/lib/server/admin/reset-league-data.ts";
 import { calculateFantasyFixtureResults } from "@/lib/server/fixtures/calculate-fantasy-fixture-results.ts";
 import { generateFantasyFixtures } from "@/lib/server/fixtures/generate-fantasy-fixtures.ts";
 import { checkVotesCompletion } from "@/lib/server/matchdays/check-votes-completion.ts";
@@ -865,4 +866,35 @@ export async function calculateFantasyFixtureResultsAction(formData: FormData) {
   }
 
   redirectWithMessage(redirectPath, { error: errorMessage, notice });
+}
+
+export async function resetLeagueDataAction(formData: FormData) {
+  await assertAdminAction();
+
+  const confirmation = formData.get("confirmation");
+
+  if (confirmation !== "RESET LEGHE") {
+    redirectWithMessage("/admin", {
+      error: "Conferma non valida. Inserisci esattamente RESET LEGHE."
+    });
+  }
+
+  try {
+    const summary = await resetLeagueData();
+
+    revalidatePath("/admin");
+    revalidatePath("/leagues");
+    revalidatePath("/me");
+
+    redirectWithMessage("/admin", {
+      notice: `Reset completato. Leghe: ${summary.leagueCount}, squadre: ${summary.fantasyTeamCount}, giornate: ${summary.matchdayCount}, formazioni: ${summary.lineupCount}.`
+    });
+  } catch (error) {
+    redirectWithMessage("/admin", {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Reset dati leghe non riuscito."
+    });
+  }
 }

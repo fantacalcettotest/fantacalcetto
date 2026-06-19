@@ -1,12 +1,44 @@
 import Link from "next/link";
 
+import { resetLeagueDataAction } from "@/app/admin/actions";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { getAdminDashboardData } from "@/lib/server/admin/read-admin-data";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+type AdminPageProps = {
+  searchParams: Promise<{
+    error?: string;
+    notice?: string;
+  }>;
+};
+
+function Feedback({
+  error,
+  notice
+}: {
+  error?: string;
+  notice?: string;
+}) {
+  return (
+    <>
+      {error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
+      {notice ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {notice}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+export default async function AdminPage({ searchParams }: AdminPageProps) {
+  const { error, notice } = await searchParams;
   const { leagues } = await getAdminDashboardData();
 
   return (
@@ -14,6 +46,8 @@ export default async function AdminPage() {
       title="Dashboard amministrazione"
       subtitle="Area admin per gestire leghe, giornate, pagelle assistite e risultati."
     >
+      <Feedback error={error} notice={notice} />
+
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -133,6 +167,33 @@ export default async function AdminPage() {
           ))}
         </div>
       )}
+
+      <section className="rounded-2xl border border-rose-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">Zona pericolosa</h2>
+        <p className="mt-2 text-sm text-rose-700">
+          Cancella leghe, squadre, rose, giornate, voti, risultati e scontri.
+          Mantiene utenti e giocatori.
+        </p>
+
+        <form action={resetLeagueDataAction} className="mt-5 space-y-4">
+          <label className="block space-y-2 text-sm text-slate-700">
+            <span className="font-medium">Conferma reset</span>
+            <input
+              type="text"
+              name="confirmation"
+              placeholder="RESET LEGHE"
+              className="w-full rounded-xl border border-rose-300 px-3 py-2"
+            />
+          </label>
+
+          <button
+            type="submit"
+            className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700"
+          >
+            Reset dati leghe
+          </button>
+        </form>
+      </section>
     </AdminShell>
   );
 }
