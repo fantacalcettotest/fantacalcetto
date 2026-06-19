@@ -7,6 +7,7 @@ import {
 import { prisma } from "../../prisma.ts";
 import { calculateLeagueStandings } from "../standings/calculate-league-standings.ts";
 import { prismaDecimalToNumber } from "../votes/shared.ts";
+import { hasLeagueScheduleGenerated } from "../leagues/has-league-schedule-generated.ts";
 
 const PUBLIC_MATCHDAY_STATUSES: MatchdayStatus[] = [
   MatchdayStatus.PUBLISHED,
@@ -43,9 +44,17 @@ export async function getPublicLeaguesListData() {
     }
   });
 
-  return leagues.map((league) => {
+  const leaguesWithScheduleState = await Promise.all(
+    leagues.map(async (league) => ({
+      league,
+      scheduleGenerated: await hasLeagueScheduleGenerated(league.id)
+    }))
+  );
+
+  return leaguesWithScheduleState.map(({ league, scheduleGenerated }) => {
     const fantasyTeamsCount = league._count.fantasyTeams;
     const availableSpots = Math.max(league.maxTeams - fantasyTeamsCount, 0);
+    const registrationsClosed = scheduleGenerated;
 
     return {
       availableSpots,
@@ -53,13 +62,18 @@ export async function getPublicLeaguesListData() {
       id: league.id,
       maxTeams: league.maxTeams,
       name: league.name,
-      statusLabel: availableSpots > 0 ? "Aperta" : "Piena"
+      registrationsClosed,
+      statusLabel: registrationsClosed
+        ? "Iscrizioni chiuse"
+        : availableSpots > 0
+          ? "Aperta"
+          : "Piena"
     };
   });
 }
 
 export async function getPublicLeagueHomeData(leagueId: string) {
-  const [league, standingsResult] = await Promise.all([
+  const [league, standingsResult, scheduleGenerated] = await Promise.all([
     prisma.league.findUnique({
       where: { id: leagueId },
       select: {
@@ -92,7 +106,8 @@ export async function getPublicLeagueHomeData(leagueId: string) {
         }
       }
     }),
-    calculateLeagueStandings(leagueId)
+    calculateLeagueStandings(leagueId),
+    hasLeagueScheduleGenerated(leagueId)
   ]);
 
   if (!league) {
@@ -106,7 +121,8 @@ export async function getPublicLeagueHomeData(leagueId: string) {
       isFull: league._count.fantasyTeams >= league.maxTeams,
       maxTeams: league.maxTeams,
       name: league.name,
-      publishedMatchdaysCount: league.matchdays.length
+      publishedMatchdaysCount: league.matchdays.length,
+      registrationsClosed: scheduleGenerated
     },
     matchdays: league.matchdays,
     standings: standingsResult.standings

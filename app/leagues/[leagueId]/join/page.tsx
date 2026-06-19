@@ -65,6 +65,11 @@ export default async function JoinLeaguePage({
             <h2 className="text-xl font-semibold text-slate-900">
               Hai gia una squadra in questa lega: {data.existingLeagueTeam.name}
             </h2>
+            {data.scheduleGenerated ? (
+              <p className="mt-2 text-sm text-amber-700">
+                Le iscrizioni sono chiuse perché il calendario è già stato generato.
+              </p>
+            ) : null}
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
                 href={`/me/teams/${data.existingLeagueTeam.id}`}
@@ -72,6 +77,23 @@ export default async function JoinLeaguePage({
               >
                 Apri la mia squadra
               </Link>
+              <Link
+                href={`/leagues/${data.league.id}`}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+              >
+                Torna alla lega
+              </Link>
+            </div>
+          </section>
+        ) : data.scheduleGenerated ? (
+          <section className="rounded-3xl border border-amber-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-slate-900">
+              Iscrizioni chiuse
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Le iscrizioni sono chiuse perché il calendario è già stato generato.
+            </p>
+            <div className="mt-4">
               <Link
                 href={`/leagues/${data.league.id}`}
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"

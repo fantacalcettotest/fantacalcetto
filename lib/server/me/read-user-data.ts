@@ -1,5 +1,6 @@
 import { MatchdayStatus, UserRole } from "@prisma/client";
 
+import { hasLeagueScheduleGenerated } from "@/lib/server/leagues/has-league-schedule-generated.ts";
 import { prisma } from "@/lib/prisma.ts";
 import type { PlayerRoleFilter } from "@/lib/players/player-role.ts";
 import { validateLineupComposition } from "@/lib/server/lineups/validate-lineup-composition.ts";
@@ -132,7 +133,7 @@ export async function getUserDashboardData(appUserId: string) {
 }
 
 export async function getLeagueJoinPageData(leagueId: string, appUserId: string) {
-  const [league, existingLeagueTeam] = await Promise.all([
+  const [league, existingLeagueTeam, scheduleGenerated] = await Promise.all([
     prisma.league.findUnique({
       where: {
         id: leagueId
@@ -167,7 +168,8 @@ export async function getLeagueJoinPageData(leagueId: string, appUserId: string)
         },
         name: true
       }
-    })
+    }),
+    hasLeagueScheduleGenerated(leagueId)
   ]);
 
   if (!league) {
@@ -177,10 +179,12 @@ export async function getLeagueJoinPageData(leagueId: string, appUserId: string)
   return {
     canJoin:
       !existingLeagueTeam &&
-      league._count.fantasyTeams < league.maxTeams,
+      league._count.fantasyTeams < league.maxTeams &&
+      !scheduleGenerated,
     existingLeagueTeam,
     isFull: league._count.fantasyTeams >= league.maxTeams,
-    league
+    league,
+    scheduleGenerated
   };
 }
 
@@ -260,11 +264,13 @@ export async function getUserTeamPageData(teamId: string) {
     team._count.teamScores > 0 ||
     team._count.homeFixtures > 0 ||
     team._count.awayFixtures > 0;
+  const leagueScheduleGenerated = await hasLeagueScheduleGenerated(team.leagueId);
 
   return {
     ...team,
-    canLeaveLeague: !hasParticipationHistory,
-    hasParticipationHistory
+    canLeaveLeague: !hasParticipationHistory && !leagueScheduleGenerated,
+    hasParticipationHistory,
+    leagueScheduleGenerated
   };
 }
 

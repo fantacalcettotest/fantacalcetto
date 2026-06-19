@@ -1,5 +1,6 @@
 import { LeagueRole, Prisma } from "@prisma/client";
 
+import { hasLeagueScheduleGeneratedWithDb } from "@/lib/server/leagues/has-league-schedule-generated.ts";
 import { prisma } from "@/lib/prisma.ts";
 
 export type CreateUserFantasyTeamInput = {
@@ -48,6 +49,12 @@ export async function createUserFantasyTeam(
 
       if (!league) {
         throw new Error("Lega non trovata.");
+      }
+
+      if (await hasLeagueScheduleGeneratedWithDb(tx, input.leagueId)) {
+        throw new Error(
+          "Le iscrizioni sono chiuse perché il calendario è già stato generato."
+        );
       }
 
       const existingTeam = await tx.fantasyTeam.findUnique({

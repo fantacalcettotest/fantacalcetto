@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireAuthenticatedAppUser } from "@/lib/auth/app-user";
+import { hasLeagueScheduleGeneratedWithDb } from "@/lib/server/leagues/has-league-schedule-generated.ts";
 import type { PlayerRoleFilter } from "@/lib/players/player-role.ts";
 import { parsePlayerRoleFilter } from "@/lib/players/player-role.ts";
 import { prisma } from "@/lib/prisma.ts";
@@ -223,6 +224,12 @@ export async function leaveLeagueAction(teamId: string, formData: FormData) {
 
       if (team.userId !== authContext.appUser.id) {
         throw new Error("Accesso non autorizzato.");
+      }
+
+      if (await hasLeagueScheduleGeneratedWithDb(tx, team.leagueId)) {
+        throw new Error(
+          "Non puoi abbandonare questa lega perché il calendario è già stato generato."
+        );
       }
 
       const hasParticipationHistory =

@@ -50,7 +50,11 @@ export default async function PublicLeaguePage({
           </Link>
         </div>
 
-        {data.league.isFull ? (
+        {data.league.registrationsClosed ? (
+          <div className="mt-4 rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
+            Iscrizioni chiuse: il calendario della lega è già stato generato.
+          </div>
+        ) : data.league.isFull ? (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
             Lega piena.
           </div>

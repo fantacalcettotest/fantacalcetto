@@ -50,7 +50,9 @@ export default async function PublicLeaguesPage() {
                     </p>
                     <div
                       className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                        league.availableSpots > 0
+                        league.registrationsClosed
+                          ? "bg-slate-200 text-slate-700"
+                          : league.availableSpots > 0
                           ? "bg-emerald-100 text-emerald-700"
                           : "bg-amber-100 text-amber-700"
                       }`}
@@ -66,12 +68,14 @@ export default async function PublicLeaguesPage() {
                     >
                       Vedi lega
                     </Link>
-                    <Link
-                      href={`/leagues/${league.id}/join`}
-                      className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
-                    >
-                      Entra / Crea squadra
-                    </Link>
+                    {!league.registrationsClosed ? (
+                      <Link
+                        href={`/leagues/${league.id}/join`}
+                        className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
+                      >
+                        Entra / Crea squadra
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
               </article>
