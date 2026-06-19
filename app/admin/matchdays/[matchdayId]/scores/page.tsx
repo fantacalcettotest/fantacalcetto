@@ -9,6 +9,7 @@ import {
   generateFantasyFixturesAction,
   publishMatchdayAction
 } from "@/app/admin/actions";
+import { getFixtureAdminNote, getFixtureForfeitOutcome } from "@/lib/server/fixtures/fixture-forfeit";
 import { getAdminMatchdayScoresData } from "@/lib/server/admin/read-admin-data";
 
 export const dynamic = "force-dynamic";
@@ -227,27 +228,40 @@ export default async function AdminMatchdayScoresPage({
             ) : null}
 
             {data.matchday.fixtures.map((fixture) => (
-              <div
-                key={fixture.id}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-lg font-semibold text-slate-900">
-                      {fixture.homeTeam.name} {fixture.homeGoals ?? "-"} -{" "}
-                      {fixture.awayGoals ?? "-"} {fixture.awayTeam.name}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-600">
-                      Fantapunti: {fixture.homeTeam.name}{" "}
-                      <strong>{formatScore(fixture.homeTeamScore?.totalScore ?? null)}</strong>{" "}
-                      | {fixture.awayTeam.name}{" "}
-                      <strong>{formatScore(fixture.awayTeamScore?.totalScore ?? null)}</strong>
-                    </p>
-                  </div>
+              (() => {
+                const forfeitOutcome = getFixtureForfeitOutcome({
+                  awayTeamScoreId: fixture.awayTeamScore?.id ?? null,
+                  homeTeamScoreId: fixture.homeTeamScore?.id ?? null
+                });
+                const fixtureNote = getFixtureAdminNote(forfeitOutcome);
 
-                  <StatusBadge status={fixture.status} />
-                </div>
-              </div>
+                return (
+                  <div
+                    key={fixture.id}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <p className="text-lg font-semibold text-slate-900">
+                          {fixture.homeTeam.name} {fixture.homeGoals ?? "-"} -{" "}
+                          {fixture.awayGoals ?? "-"} {fixture.awayTeam.name}
+                        </p>
+                        <p className="mt-2 text-sm text-slate-600">
+                          Fantapunti: {fixture.homeTeam.name}{" "}
+                          <strong>{formatScore(fixture.homeTeamScore?.totalScore ?? null)}</strong>{" "}
+                          | {fixture.awayTeam.name}{" "}
+                          <strong>{formatScore(fixture.awayTeamScore?.totalScore ?? null)}</strong>
+                        </p>
+                        {fixtureNote ? (
+                          <p className="mt-2 text-sm text-amber-700">{fixtureNote}</p>
+                        ) : null}
+                      </div>
+
+                      <StatusBadge status={fixture.status} />
+                    </div>
+                  </div>
+                );
+              })()
             ))}
           </div>
         )}

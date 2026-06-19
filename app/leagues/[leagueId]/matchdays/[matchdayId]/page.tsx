@@ -1,6 +1,7 @@
 import { ScorePlayerFinalType } from "@prisma/client";
 import { notFound } from "next/navigation";
 
+import { getFixtureAdminNote, getFixtureForfeitOutcome } from "@/lib/server/fixtures/fixture-forfeit";
 import { getPublicMatchdayData } from "@/lib/server/public/read-public-league-data";
 
 export const dynamic = "force-dynamic";
@@ -133,21 +134,34 @@ export default async function PublicMatchdayPage({
         ) : (
           <div className="mt-5 space-y-4">
             {data.matchday.fixtures.map((fixture) => (
-              <article
-                key={fixture.id}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
-              >
-                <p className="text-lg font-semibold text-slate-900">
-                  {fixture.homeTeam.name} {fixture.homeGoals ?? "-"} -{" "}
-                  {fixture.awayGoals ?? "-"} {fixture.awayTeam.name}
-                </p>
-                <p className="mt-2 text-sm text-slate-600">
-                  Fantapunti: {fixture.homeTeam.name}{" "}
-                  <strong>{formatScore(fixture.homeTeamScore?.totalScore ?? null)}</strong>{" "}
-                  | {fixture.awayTeam.name}{" "}
-                  <strong>{formatScore(fixture.awayTeamScore?.totalScore ?? null)}</strong>
-                </p>
-              </article>
+              (() => {
+                const forfeitOutcome = getFixtureForfeitOutcome({
+                  awayTeamScoreId: fixture.awayTeamScore?.id ?? null,
+                  homeTeamScoreId: fixture.homeTeamScore?.id ?? null
+                });
+                const fixtureNote = getFixtureAdminNote(forfeitOutcome);
+
+                return (
+                  <article
+                    key={fixture.id}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
+                  >
+                    <p className="text-lg font-semibold text-slate-900">
+                      {fixture.homeTeam.name} {fixture.homeGoals ?? "-"} -{" "}
+                      {fixture.awayGoals ?? "-"} {fixture.awayTeam.name}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Fantapunti: {fixture.homeTeam.name}{" "}
+                      <strong>{formatScore(fixture.homeTeamScore?.totalScore ?? null)}</strong>{" "}
+                      | {fixture.awayTeam.name}{" "}
+                      <strong>{formatScore(fixture.awayTeamScore?.totalScore ?? null)}</strong>
+                    </p>
+                    {fixtureNote ? (
+                      <p className="mt-2 text-sm text-amber-700">{fixtureNote}</p>
+                    ) : null}
+                  </article>
+                );
+              })()
             ))}
           </div>
         )}

@@ -2,6 +2,7 @@ import { FantasyFixtureStatus } from "@prisma/client";
 
 import { prisma } from "../../prisma.ts";
 import { convertScoreToGoals } from "../../scoring/convert-score-to-goals.ts";
+import { getFixtureForfeitOutcome } from "./fixture-forfeit.ts";
 import { prismaDecimalToNumber } from "../votes/shared.ts";
 
 export type CalculateFantasyFixtureResultsResult = {
@@ -55,10 +56,6 @@ export async function calculateFantasyFixtureResults(
       }
     });
 
-    if (teamScores.length === 0) {
-      throw new Error(`No TeamScore records found for matchday ${matchdayId}.`);
-    }
-
     const scoreByFantasyTeamId = new Map(
       teamScores.map((teamScore) => [teamScore.fantasyTeamId, teamScore])
     );
@@ -66,36 +63,40 @@ export async function calculateFantasyFixtureResults(
 
     for (const fixture of fixtures) {
       const homeTeamScore = scoreByFantasyTeamId.get(fixture.homeTeamId);
-      if (!homeTeamScore) {
-        throw new Error(
-          `Missing TeamScore for home team ${fixture.homeTeamId} in matchday ${matchdayId}.`
-        );
-      }
-
       const awayTeamScore = scoreByFantasyTeamId.get(fixture.awayTeamId);
-      if (!awayTeamScore) {
-        throw new Error(
-          `Missing TeamScore for away team ${fixture.awayTeamId} in matchday ${matchdayId}.`
-        );
+      const forfeitOutcome = getFixtureForfeitOutcome({
+        awayTeamScoreId: awayTeamScore?.id ?? null,
+        homeTeamScoreId: homeTeamScore?.id ?? null
+      });
+
+      let homeGoals = 0;
+      let awayGoals = 0;
+
+      if (forfeitOutcome === "NONE") {
+        const homeTotalScore = prismaDecimalToNumber(homeTeamScore?.totalScore ?? null);
+        const awayTotalScore = prismaDecimalToNumber(awayTeamScore?.totalScore ?? null);
+
+        if (homeTotalScore === null) {
+          throw new Error(
+            `TeamScore ${homeTeamScore?.id ?? "unknown"} has null totalScore and cannot be converted to goals.`
+          );
+        }
+
+        if (awayTotalScore === null) {
+          throw new Error(
+            `TeamScore ${awayTeamScore?.id ?? "unknown"} has null totalScore and cannot be converted to goals.`
+          );
+        }
+
+        homeGoals = convertScoreToGoals(homeTotalScore);
+        awayGoals = convertScoreToGoals(awayTotalScore);
+      } else if (forfeitOutcome === "HOME_WIN_BY_FORFEIT") {
+        homeGoals = 3;
+        awayGoals = 0;
+      } else if (forfeitOutcome === "AWAY_WIN_BY_FORFEIT") {
+        homeGoals = 0;
+        awayGoals = 3;
       }
-
-      const homeTotalScore = prismaDecimalToNumber(homeTeamScore.totalScore);
-      const awayTotalScore = prismaDecimalToNumber(awayTeamScore.totalScore);
-
-      if (homeTotalScore === null) {
-        throw new Error(
-          `TeamScore ${homeTeamScore.id} has null totalScore and cannot be converted to goals.`
-        );
-      }
-
-      if (awayTotalScore === null) {
-        throw new Error(
-          `TeamScore ${awayTeamScore.id} has null totalScore and cannot be converted to goals.`
-        );
-      }
-
-      const homeGoals = convertScoreToGoals(homeTotalScore);
-      const awayGoals = convertScoreToGoals(awayTotalScore);
 
       await tx.fantasyFixture.update({
         where: {
@@ -103,9 +104,9 @@ export async function calculateFantasyFixtureResults(
         },
         data: {
           awayGoals,
-          awayTeamScoreId: awayTeamScore.id,
+          awayTeamScoreId: awayTeamScore?.id ?? null,
           homeGoals,
-          homeTeamScoreId: homeTeamScore.id,
+          homeTeamScoreId: homeTeamScore?.id ?? null,
           status: FantasyFixtureStatus.CALCULATED
         }
       });
