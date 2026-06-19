@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { calculateFantasyFixtureResults } from "@/lib/server/fixtures/calculate-fantasy-fixture-results.ts";
+import { generateFantasyFixtures } from "@/lib/server/fixtures/generate-fantasy-fixtures.ts";
 import { checkVotesCompletion } from "@/lib/server/matchdays/check-votes-completion.ts";
 import { generateRequiredVotePlayers } from "@/lib/server/matchdays/generate-required-vote-players.ts";
 import { publishMatchday } from "@/lib/server/matchdays/publish-matchday.ts";
@@ -26,10 +28,13 @@ function redirectWithMessage(
   redirect(`${url.pathname}${url.search}`);
 }
 
-function revalidateAdminPaths(matchdayId: string) {
+function revalidateAdminPaths(matchdayId: string, leagueId?: string | null) {
   revalidatePath("/admin");
   revalidatePath(`/admin/matchdays/${matchdayId}/votes`);
   revalidatePath(`/admin/matchdays/${matchdayId}/scores`);
+  if (leagueId) {
+    revalidatePath(`/admin/leagues/${leagueId}/standings`);
+  }
 }
 
 function readRequiredString(
@@ -65,8 +70,18 @@ function readCounter(formData: FormData, fieldName: string): number {
   return readOptionalNumber(formData, fieldName) ?? 0;
 }
 
+function readOptionalString(formData: FormData, fieldName: string): string | null {
+  const value = formData.get(fieldName);
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  return value;
+}
+
 export async function generateRequiredVotePlayersAction(formData: FormData) {
   const matchdayId = readRequiredString(formData, "matchdayId");
+  const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
   let notice: string | undefined;
   let errorMessage: string | undefined;
@@ -74,7 +89,7 @@ export async function generateRequiredVotePlayersAction(formData: FormData) {
   try {
     const result = await generateRequiredVotePlayers(matchdayId);
     await checkVotesCompletion(matchdayId);
-    revalidateAdminPaths(matchdayId);
+    revalidateAdminPaths(matchdayId, leagueId);
     notice = `Giocatori utili aggiornati: ${result.totalRequired}.`;
   } catch (error) {
     errorMessage =
@@ -87,6 +102,7 @@ export async function generateRequiredVotePlayersAction(formData: FormData) {
 export async function savePlayerVoteAction(formData: FormData) {
   const matchdayId = readRequiredString(formData, "matchdayId");
   const playerId = readRequiredString(formData, "playerId");
+  const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
   const isSv = formData.get("isSv") === "on";
   const baseVote = isSv ? null : readOptionalNumber(formData, "baseVote");
@@ -114,7 +130,7 @@ export async function savePlayerVoteAction(formData: FormData) {
     });
 
     await checkVotesCompletion(matchdayId);
-    revalidateAdminPaths(matchdayId);
+    revalidateAdminPaths(matchdayId, leagueId);
     notice = `Voto salvato per ${result.playerId}.`;
   } catch (error) {
     errorMessage =
@@ -126,13 +142,14 @@ export async function savePlayerVoteAction(formData: FormData) {
 
 export async function calculateMatchdayScoresAction(formData: FormData) {
   const matchdayId = readRequiredString(formData, "matchdayId");
+  const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
   let notice: string | undefined;
   let errorMessage: string | undefined;
 
   try {
     const result = await calculateMatchdayScores(matchdayId);
-    revalidateAdminPaths(matchdayId);
+    revalidateAdminPaths(matchdayId, leagueId);
     notice = `Punteggi calcolati per ${result.teamsScored.length} squadre.`;
   } catch (error) {
     errorMessage =
@@ -144,17 +161,56 @@ export async function calculateMatchdayScoresAction(formData: FormData) {
 
 export async function publishMatchdayAction(formData: FormData) {
   const matchdayId = readRequiredString(formData, "matchdayId");
+  const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
   let notice: string | undefined;
   let errorMessage: string | undefined;
 
   try {
     const result = await publishMatchday(matchdayId);
-    revalidateAdminPaths(matchdayId);
-    notice = `Giornata pubblicata. Team score pubblicati: ${result.publishedTeamScoresCount}.`;
+    revalidateAdminPaths(matchdayId, leagueId);
+    notice = `Giornata pubblicata. Team score pubblicati: ${result.publishedTeamScoresCount}. Fixture pubblicate: ${result.publishedFixturesCount}.`;
   } catch (error) {
     errorMessage =
       error instanceof Error ? error.message : "Pubblicazione non riuscita.";
+  }
+
+  redirectWithMessage(redirectPath, { error: errorMessage, notice });
+}
+
+export async function generateFantasyFixturesAction(formData: FormData) {
+  const matchdayId = readRequiredString(formData, "matchdayId");
+  const leagueId = readOptionalString(formData, "leagueId");
+  const redirectPath = readRequiredString(formData, "redirectPath");
+  let notice: string | undefined;
+  let errorMessage: string | undefined;
+
+  try {
+    const result = await generateFantasyFixtures(matchdayId);
+    revalidateAdminPaths(matchdayId, leagueId);
+    notice = `Scontri generati: ${result.createdCount}. Totale fixture attese: ${result.totalFixtures}.`;
+  } catch (error) {
+    errorMessage =
+      error instanceof Error ? error.message : "Generazione scontri non riuscita.";
+  }
+
+  redirectWithMessage(redirectPath, { error: errorMessage, notice });
+}
+
+export async function calculateFantasyFixtureResultsAction(formData: FormData) {
+  const matchdayId = readRequiredString(formData, "matchdayId");
+  const leagueId = readOptionalString(formData, "leagueId");
+  const redirectPath = readRequiredString(formData, "redirectPath");
+  let notice: string | undefined;
+  let errorMessage: string | undefined;
+
+  try {
+    const result = await calculateFantasyFixtureResults(matchdayId);
+    revalidateAdminPaths(matchdayId, leagueId);
+    notice = `Risultati scontri calcolati: ${result.calculatedCount}.`;
+  } catch (error) {
+    errorMessage =
+      error instanceof Error ? error.message : "Calcolo risultati scontri non riuscito.";
   }
 
   redirectWithMessage(redirectPath, { error: errorMessage, notice });

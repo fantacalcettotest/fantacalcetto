@@ -1,4 +1,5 @@
 import { prisma } from "../../prisma.ts";
+import { calculateLeagueStandings } from "../standings/calculate-league-standings.ts";
 import { prismaDecimalToNumber } from "../votes/shared.ts";
 
 export async function getAdminDashboardData() {
@@ -139,6 +140,35 @@ export async function getAdminMatchdayScoresData(matchdayId: string) {
   const matchday = await prisma.matchday.findUnique({
     where: { id: matchdayId },
     include: {
+      fixtures: {
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        include: {
+          awayTeam: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          awayTeamScore: {
+            select: {
+              id: true,
+              totalScore: true
+            }
+          },
+          homeTeam: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          homeTeamScore: {
+            select: {
+              id: true,
+              totalScore: true
+            }
+          }
+        }
+      },
       league: {
         select: {
           id: true,
@@ -210,6 +240,26 @@ export async function getAdminMatchdayScoresData(matchdayId: string) {
     },
     matchday: {
       id: matchday.id,
+      fixtures: matchday.fixtures.map((fixture) => ({
+        awayGoals: fixture.awayGoals,
+        awayTeam: fixture.awayTeam,
+        awayTeamScore: fixture.awayTeamScore
+          ? {
+              id: fixture.awayTeamScore.id,
+              totalScore: prismaDecimalToNumber(fixture.awayTeamScore.totalScore)
+            }
+          : null,
+        homeGoals: fixture.homeGoals,
+        homeTeam: fixture.homeTeam,
+        homeTeamScore: fixture.homeTeamScore
+          ? {
+              id: fixture.homeTeamScore.id,
+              totalScore: prismaDecimalToNumber(fixture.homeTeamScore.totalScore)
+            }
+          : null,
+        id: fixture.id,
+        status: fixture.status
+      })),
       league: matchday.league,
       number: matchday.number,
       status: matchday.status,
@@ -232,5 +282,34 @@ export async function getAdminMatchdayScoresData(matchdayId: string) {
         totalScore: prismaDecimalToNumber(teamScore.totalScore)
       }))
     }
+  };
+}
+
+export async function getAdminLeagueStandingsData(leagueId: string) {
+  const [league, standingsResult] = await Promise.all([
+    prisma.league.findUnique({
+      where: { id: leagueId },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        _count: {
+          select: {
+            fantasyTeams: true,
+            matchdays: true
+          }
+        }
+      }
+    }),
+    calculateLeagueStandings(leagueId)
+  ]);
+
+  if (!league) {
+    return null;
+  }
+
+  return {
+    league,
+    standings: standingsResult.standings
   };
 }

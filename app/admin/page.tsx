@@ -33,11 +33,19 @@ export default async function AdminPage() {
                     {league.name}
                   </h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Membri: {league._count.members} · Fantasy team:{" "}
+                    Membri: {league._count.members} | Fantasy team:{" "}
                     {league._count.fantasyTeams}
                   </p>
                 </div>
-                <StatusBadge status={league.status} />
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link
+                    href={`/admin/leagues/${league.id}/standings`}
+                    className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                  >
+                    Vedi classifica
+                  </Link>
+                  <StatusBadge status={league.status} />
+                </div>
               </div>
 
               <div className="mt-6 space-y-4">
@@ -57,9 +65,9 @@ export default async function AdminPage() {
                             Giornata {matchday.number}
                           </h3>
                           <p className="mt-2 text-sm text-slate-600">
-                            Lineup: {matchday._count.lineups} · Giocatori utili:{" "}
-                            {matchday._count.requiredVotes} · Voti salvati:{" "}
-                            {matchday._count.playerVotes} · Team score:{" "}
+                            Lineup: {matchday._count.lineups} | Giocatori utili:{" "}
+                            {matchday._count.requiredVotes} | Voti salvati:{" "}
+                            {matchday._count.playerVotes} | Team score:{" "}
                             {matchday._count.teamScores}
                           </p>
                         </div>

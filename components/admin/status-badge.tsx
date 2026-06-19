@@ -5,6 +5,7 @@ type StatusBadgeProps = {
 function getStatusClasses(status: string) {
   if (
     [
+      "CALCULATED",
       "COMPLETED",
       "SV",
       "VOTES_COMPLETED",
@@ -16,9 +17,13 @@ function getStatusClasses(status: string) {
   }
 
   if (
-    ["PENDING", "VOTES_PENDING", "LINEUPS_OPEN", "LINEUPS_LOCKED"].includes(
-      status
-    )
+    [
+      "PENDING",
+      "SCHEDULED",
+      "VOTES_PENDING",
+      "LINEUPS_OPEN",
+      "LINEUPS_LOCKED"
+    ].includes(status)
   ) {
     return "bg-amber-100 text-amber-800 border-amber-200";
   }

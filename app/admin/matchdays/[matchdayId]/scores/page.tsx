@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { StatusBadge } from "@/components/admin/status-badge";
 import {
+  calculateFantasyFixtureResultsAction,
   calculateMatchdayScoresAction,
+  generateFantasyFixturesAction,
   publishMatchdayAction
 } from "@/app/admin/actions";
 import { getAdminMatchdayScoresData } from "@/lib/server/admin/read-admin-data";
@@ -45,6 +47,14 @@ function Feedback({
   );
 }
 
+function formatScore(value: number | null) {
+  if (value === null) {
+    return "-";
+  }
+
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
 export default async function AdminMatchdayScoresPage({
   params,
   searchParams
@@ -58,13 +68,24 @@ export default async function AdminMatchdayScoresPage({
   }
 
   const redirectPath = `/admin/matchdays/${matchdayId}/scores`;
-  const canCalculate = data.completion.isComplete;
-  const canPublish = data.matchday.status === "SCORES_CALCULATED";
+  const hasFixtures = data.matchday.fixtures.length > 0;
+  const hasScheduledFixtures = data.matchday.fixtures.some(
+    (fixture) => fixture.status === "SCHEDULED"
+  );
+  const hasCalculatedFixtures = data.matchday.fixtures.some(
+    (fixture) => fixture.status === "CALCULATED"
+  );
+  const canCalculateScores = data.completion.isComplete;
+  const canCalculateFixtures =
+    hasFixtures && hasScheduledFixtures && data.matchday.teamScores.length > 0;
+  const canPublish =
+    data.matchday.status === "SCORES_CALCULATED" ||
+    (data.matchday.status === "PUBLISHED" && hasCalculatedFixtures);
 
   return (
     <AdminShell
-      title={`Punteggi · Giornata ${data.matchday.number}`}
-      subtitle={`${data.matchday.league.name} · Stato giornata ${data.matchday.status}`}
+      title={`Punteggi | Giornata ${data.matchday.number}`}
+      subtitle={`${data.matchday.league.name} | Stato giornata ${data.matchday.status}`}
     >
       <Feedback error={error} notice={notice} />
 
@@ -75,7 +96,7 @@ export default async function AdminMatchdayScoresPage({
               Voti richiesti: <strong>{data.completion.totalRequired}</strong>
             </p>
             <p>
-              Completati: <strong>{data.completion.completedCount}</strong> ·
+              Completati: <strong>{data.completion.completedCount}</strong> |
               Mancanti: <strong>{data.completion.missingCount}</strong>
             </p>
           </div>
@@ -84,11 +105,12 @@ export default async function AdminMatchdayScoresPage({
             <StatusBadge status={data.matchday.status} />
 
             <form action={calculateMatchdayScoresAction}>
+              <input type="hidden" name="leagueId" value={data.matchday.league.id} />
               <input type="hidden" name="matchdayId" value={matchdayId} />
               <input type="hidden" name="redirectPath" value={redirectPath} />
               <button
                 type="submit"
-                disabled={!canCalculate}
+                disabled={!canCalculateScores}
                 className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 Calcola punteggi
@@ -96,6 +118,7 @@ export default async function AdminMatchdayScoresPage({
             </form>
 
             <form action={publishMatchdayAction}>
+              <input type="hidden" name="leagueId" value={data.matchday.league.id} />
               <input type="hidden" name="matchdayId" value={matchdayId} />
               <input type="hidden" name="redirectPath" value={redirectPath} />
               <button
@@ -108,6 +131,13 @@ export default async function AdminMatchdayScoresPage({
             </form>
 
             <Link
+              href={`/admin/leagues/${data.matchday.league.id}/standings`}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+            >
+              Vedi classifica
+            </Link>
+
+            <Link
               href={`/admin/matchdays/${matchdayId}/votes`}
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
             >
@@ -116,9 +146,9 @@ export default async function AdminMatchdayScoresPage({
           </div>
         </div>
 
-        {!canCalculate ? (
+        {!canCalculateScores ? (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            Non puoi calcolare i punteggi finché tutti i voti richiesti non sono
+            Non puoi calcolare i punteggi finche tutti i voti richiesti non sono
             completi.
           </div>
         ) : null}
@@ -131,13 +161,96 @@ export default async function AdminMatchdayScoresPage({
             <ul className="mt-3 space-y-2 text-sm text-slate-600">
               {data.completion.missingRecords.map((record) => (
                 <li key={record.playerId}>
-                  {record.playerName} · status {record.status} · usage{" "}
+                  {record.playerName} | status {record.status} | usage{" "}
                   {record.usageCount}
                 </li>
               ))}
             </ul>
           </div>
         ) : null}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">
+              Scontri diretti
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Gestione fixture 1 vs 1 e conversione dei fantapunti in gol.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {!hasFixtures ? (
+              <form action={generateFantasyFixturesAction}>
+                <input type="hidden" name="leagueId" value={data.matchday.league.id} />
+                <input type="hidden" name="matchdayId" value={matchdayId} />
+                <input type="hidden" name="redirectPath" value={redirectPath} />
+                <button
+                  type="submit"
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                >
+                  Genera scontri
+                </button>
+              </form>
+            ) : null}
+
+            {hasFixtures ? (
+              <form action={calculateFantasyFixtureResultsAction}>
+                <input type="hidden" name="leagueId" value={data.matchday.league.id} />
+                <input type="hidden" name="matchdayId" value={matchdayId} />
+                <input type="hidden" name="redirectPath" value={redirectPath} />
+                <button
+                  type="submit"
+                  disabled={!canCalculateFixtures}
+                  className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition enabled:hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-200"
+                >
+                  Calcola risultati scontri
+                </button>
+              </form>
+            ) : null}
+          </div>
+        </div>
+
+        {!hasFixtures ? (
+          <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+            Nessuno scontro generato per questa giornata.
+          </div>
+        ) : (
+          <div className="mt-5 space-y-4">
+            {!canCalculateFixtures && hasScheduledFixtures ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                Per calcolare i risultati degli scontri servono i TeamScore della
+                giornata.
+              </div>
+            ) : null}
+
+            {data.matchday.fixtures.map((fixture) => (
+              <div
+                key={fixture.id}
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="text-lg font-semibold text-slate-900">
+                      {fixture.homeTeam.name} {fixture.homeGoals ?? "-"} -{" "}
+                      {fixture.awayGoals ?? "-"} {fixture.awayTeam.name}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Fantapunti: {fixture.homeTeam.name}{" "}
+                      <strong>{formatScore(fixture.homeTeamScore?.totalScore ?? null)}</strong>{" "}
+                      | {fixture.awayTeam.name}{" "}
+                      <strong>{formatScore(fixture.awayTeamScore?.totalScore ?? null)}</strong>
+                    </p>
+                  </div>
+
+                  <StatusBadge status={fixture.status} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {data.matchday.teamScores.length === 0 ? (
@@ -157,8 +270,8 @@ export default async function AdminMatchdayScoresPage({
                     {teamScore.fantasyTeam.name}
                   </h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Totale: <strong>{teamScore.totalScore ?? 0}</strong> · Auto
-                    subs: <strong>{teamScore.autoSubsUsed}</strong>
+                    Totale: <strong>{teamScore.totalScore ?? 0}</strong> | Auto subs:{" "}
+                    <strong>{teamScore.autoSubsUsed}</strong>
                   </p>
                 </div>
 

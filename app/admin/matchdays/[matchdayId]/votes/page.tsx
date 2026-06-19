@@ -87,6 +87,7 @@ export default async function AdminMatchdayVotesPage({
           <div className="flex flex-wrap items-center gap-3">
             <StatusBadge status={data.matchday.status} />
             <form action={generateRequiredVotePlayersAction}>
+              <input type="hidden" name="leagueId" value={data.matchday.league.id} />
               <input type="hidden" name="matchdayId" value={matchdayId} />
               <input type="hidden" name="redirectPath" value={redirectPath} />
               <button
@@ -148,6 +149,7 @@ export default async function AdminMatchdayVotesPage({
                 action={savePlayerVoteAction}
                 className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4"
               >
+                <input type="hidden" name="leagueId" value={data.matchday.league.id} />
                 <input type="hidden" name="matchdayId" value={matchdayId} />
                 <input type="hidden" name="playerId" value={record.player.id} />
                 <input type="hidden" name="redirectPath" value={redirectPath} />
