@@ -936,9 +936,13 @@ export async function saveBulkPlayerVotesAction(formData: FormData) {
   redirectWithMessage(redirectPath, { error: errorMessage, notice });
 }
 
-export async function generateDemoVotesForPendingPlayersAction(matchdayId: string) {
+export async function generateDemoVotesForPendingPlayersAction(
+  matchdayId: string,
+  redirectPath?: string
+) {
   await assertAdminAction();
-  const redirectPath = `/admin/matchdays/${matchdayId}/votes?filter=pending`;
+  const targetRedirectPath =
+    redirectPath ?? `/admin/matchdays/${matchdayId}/votes?status=PENDING`;
   let notice: string | undefined;
   let errorMessage: string | undefined;
 
@@ -1014,7 +1018,7 @@ export async function generateDemoVotesForPendingPlayersAction(matchdayId: strin
       error instanceof Error ? error.message : "Generazione voti demo non riuscita.";
   }
 
-  redirectWithMessage(redirectPath, { error: errorMessage, notice });
+  redirectWithMessage(targetRedirectPath, { error: errorMessage, notice });
 }
 
 export async function calculateMatchdayScoresAction(formData: FormData) {

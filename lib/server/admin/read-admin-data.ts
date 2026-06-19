@@ -1,3 +1,5 @@
+import { RequiredVoteStatus } from "@prisma/client";
+
 import { prisma } from "../../prisma.ts";
 import type { PlayerRoleFilter } from "@/lib/players/player-role";
 import { calculateLeagueStandings } from "../standings/calculate-league-standings.ts";
@@ -10,6 +12,19 @@ export type AdminPlayerSourceFilter =
   | "unknown";
 
 export type AdminPlayerStatusFilter = "ACTIVE" | "ALL" | "INACTIVE";
+export type AdminVoteStatusFilter =
+  | "ALL"
+  | "COMPLETED"
+  | "IGNORED"
+  | "PENDING"
+  | "SV";
+
+const REQUIRED_VOTE_STATUS_ORDER: Record<RequiredVoteStatus, number> = {
+  PENDING: 0,
+  SV: 1,
+  COMPLETED: 2,
+  IGNORED: 3
+};
 
 export async function getAdminDashboardData() {
   const leagues = await prisma.league.findMany({
@@ -47,7 +62,17 @@ export async function getAdminDashboardData() {
   };
 }
 
-export async function getAdminMatchdayVotesData(matchdayId: string) {
+export async function getAdminMatchdayVotesData(
+  matchdayId: string,
+  options?: {
+    roleFilter?: PlayerRoleFilter;
+    searchQuery?: string;
+    statusFilter?: AdminVoteStatusFilter;
+  }
+) {
+  const roleFilter = options?.roleFilter ?? "ALL";
+  const statusFilter = options?.statusFilter ?? "ALL";
+  const normalizedSearchQuery = options?.searchQuery?.trim() ?? "";
   const matchday = await prisma.matchday.findUnique({
     where: { id: matchdayId },
     include: {
@@ -65,12 +90,13 @@ export async function getAdminMatchdayVotesData(matchdayId: string) {
         }
       },
       requiredVotes: {
-        orderBy: [{ usageCount: "desc" }, { player: { name: "asc" } }],
         include: {
           player: {
             select: {
               id: true,
+              isActive: true,
               name: true,
+              role: true,
               teamName: true
             }
           }
@@ -106,6 +132,18 @@ export async function getAdminMatchdayVotesData(matchdayId: string) {
   const votesByPlayerId = new Map(
     matchday.playerVotes.map((vote) => [vote.playerId, vote])
   );
+  const blockedPlayers = await prisma.leagueBlockedPlayer.findMany({
+    where: {
+      leagueId: matchday.league.id,
+      playerId: {
+        in: matchday.requiredVotes.map((record) => record.playerId)
+      }
+    },
+    select: {
+      playerId: true
+    }
+  });
+  const blockedPlayerIds = new Set(blockedPlayers.map((entry) => entry.playerId));
   const pendingCount = matchday.requiredVotes.filter(
     (record) => record.status === "PENDING"
   ).length;
@@ -122,6 +160,54 @@ export async function getAdminMatchdayVotesData(matchdayId: string) {
     (record) => record.status !== "PENDING"
   ).length;
   const missingCount = matchday.requiredVotes.length - completedCount;
+  const allRequiredVotePlayers = matchday.requiredVotes
+    .map((requiredVotePlayer) => {
+      const playerVote = votesByPlayerId.get(requiredVotePlayer.playerId);
+
+      return {
+        player: {
+          ...requiredVotePlayer.player,
+          isBlockedInLeague: blockedPlayerIds.has(requiredVotePlayer.player.id),
+          isUnavailable:
+            blockedPlayerIds.has(requiredVotePlayer.player.id) ||
+            !requiredVotePlayer.player.isActive
+        },
+        playerVote: playerVote
+          ? {
+              ...playerVote,
+              baseVote: prismaDecimalToNumber(playerVote.baseVote),
+              finalFantavote: prismaDecimalToNumber(playerVote.finalFantavote)
+            }
+          : null,
+        status: requiredVotePlayer.status,
+        usageCount: requiredVotePlayer.usageCount
+      };
+    })
+    .sort((left, right) => {
+      const statusDiff =
+        REQUIRED_VOTE_STATUS_ORDER[left.status] -
+        REQUIRED_VOTE_STATUS_ORDER[right.status];
+
+      if (statusDiff !== 0) {
+        return statusDiff;
+      }
+
+      return left.player.name.localeCompare(right.player.name, "it");
+    });
+
+  const filteredRequiredVotePlayers = allRequiredVotePlayers.filter((record) => {
+    const matchesSearch =
+      normalizedSearchQuery.length === 0 ||
+      record.player.name.toLocaleLowerCase("it").includes(
+        normalizedSearchQuery.toLocaleLowerCase("it")
+      );
+    const matchesRole =
+      roleFilter === "ALL" || record.player.role === roleFilter;
+    const matchesStatus =
+      statusFilter === "ALL" || record.status === statusFilter;
+
+    return matchesSearch && matchesRole && matchesStatus;
+  });
 
   return {
     completion: {
@@ -141,25 +227,17 @@ export async function getAdminMatchdayVotesData(matchdayId: string) {
       lineupDeadlineAt: matchday.lineupDeadlineAt,
       lineupsCount: matchday.lineups.length,
       number: matchday.number,
-      requiredVotePlayers: matchday.requiredVotes.map((requiredVotePlayer) => {
-        const playerVote = votesByPlayerId.get(requiredVotePlayer.playerId);
-
-        return {
-          player: requiredVotePlayer.player,
-          playerVote: playerVote
-            ? {
-                ...playerVote,
-                baseVote: prismaDecimalToNumber(playerVote.baseVote),
-                finalFantavote: prismaDecimalToNumber(
-                  playerVote.finalFantavote
-                )
-              }
-            : null,
-          status: requiredVotePlayer.status,
-          usageCount: requiredVotePlayer.usageCount
-        };
-      }),
+      requiredVotePlayers: filteredRequiredVotePlayers,
       status: matchday.status
+    },
+    filters: {
+      roleFilter,
+      searchQuery: normalizedSearchQuery,
+      statusFilter
+    },
+    totals: {
+      filteredCount: filteredRequiredVotePlayers.length,
+      totalCount: allRequiredVotePlayers.length
     }
   };
 }
