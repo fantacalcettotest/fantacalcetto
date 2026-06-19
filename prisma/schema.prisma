@@ -72,6 +72,13 @@ enum ScorePlayerFinalType {
   BENCH_UNUSED
 }
 
+enum FantasyFixtureStatus {
+  SCHEDULED
+  CALCULATED
+  PUBLISHED
+  LOCKED
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -132,17 +139,19 @@ model Player {
 }
 
 model FantasyTeam {
-  id         String          @id @default(cuid())
-  leagueId   String
-  userId     String
-  name       String
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  league     League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  roster     FantasyRoster[]
-  lineups    Lineup[]
-  teamScores TeamScore[]
+  id           String           @id @default(cuid())
+  leagueId     String
+  userId       String
+  name         String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  league       League           @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roster       FantasyRoster[]
+  lineups      Lineup[]
+  teamScores   TeamScore[]
+  homeFixtures FantasyFixture[] @relation("FantasyFixtureHomeTeam")
+  awayFixtures FantasyFixture[] @relation("FantasyFixtureAwayTeam")
 
   @@unique([leagueId, userId])
   @@index([userId])
@@ -173,6 +182,7 @@ model Matchday {
   requiredVotes    RequiredVotePlayer[]
   playerVotes      PlayerVote[]
   teamScores       TeamScore[]
+  fixtures         FantasyFixture[]
 
   @@unique([leagueId, number])
   @@index([leagueId, status])
@@ -258,20 +268,22 @@ model PlayerVote {
 }
 
 model TeamScore {
-  id            String            @id @default(cuid())
-  fantasyTeamId String
-  matchdayId    String
-  lineupId      String            @unique
-  status        ScoreStatus       @default(CALCULATED)
-  totalScore    Decimal?          @db.Decimal(6, 2)
-  autoSubsUsed  Int               @default(0)
-  publishedAt   DateTime?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  fantasyTeam   FantasyTeam       @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
-  matchday      Matchday          @relation(fields: [matchdayId], references: [id], onDelete: Cascade)
-  lineup        Lineup            @relation(fields: [lineupId], references: [id], onDelete: Cascade)
-  players       TeamScorePlayer[]
+  id               String            @id @default(cuid())
+  fantasyTeamId    String
+  matchdayId       String
+  lineupId         String            @unique
+  status           ScoreStatus       @default(CALCULATED)
+  totalScore       Decimal?          @db.Decimal(6, 2)
+  autoSubsUsed     Int               @default(0)
+  publishedAt      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  fantasyTeam      FantasyTeam       @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  matchday         Matchday          @relation(fields: [matchdayId], references: [id], onDelete: Cascade)
+  lineup           Lineup            @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+  players          TeamScorePlayer[]
+  homeTeamFixtures FantasyFixture[]  @relation("FantasyFixtureHomeTeamScore")
+  awayTeamFixtures FantasyFixture[]  @relation("FantasyFixtureAwayTeamScore")
 
   @@unique([fantasyTeamId, matchdayId])
   @@index([matchdayId, status])
@@ -300,4 +312,26 @@ model TeamScorePlayer {
   @@unique([teamScoreId, lineupPlayerId])
   @@index([teamScoreId, finalType])
   @@index([playerId])
+}
+
+model FantasyFixture {
+  id              String               @id @default(cuid())
+  matchdayId      String
+  homeTeamId      String
+  awayTeamId      String
+  homeTeamScoreId String?              @unique
+  awayTeamScoreId String?              @unique
+  homeGoals       Int?
+  awayGoals       Int?
+  status          FantasyFixtureStatus @default(SCHEDULED)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  matchday        Matchday             @relation(fields: [matchdayId], references: [id], onDelete: Cascade)
+  homeTeam        FantasyTeam          @relation("FantasyFixtureHomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam        FantasyTeam          @relation("FantasyFixtureAwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  homeTeamScore   TeamScore?           @relation("FantasyFixtureHomeTeamScore", fields: [homeTeamScoreId], references: [id], onDelete: SetNull)
+  awayTeamScore   TeamScore?           @relation("FantasyFixtureAwayTeamScore", fields: [awayTeamScoreId], references: [id], onDelete: SetNull)
+
+  @@unique([matchdayId, homeTeamId, awayTeamId])
+  @@index([matchdayId])
 }

@@ -4,6 +4,7 @@ import { SlotType, ScorePlayerFinalType } from "@prisma/client";
 
 import { calculateFantavote } from "../lib/scoring/calculate-fantavote.ts";
 import { calculateTeamScore } from "../lib/scoring/calculate-team-score.ts";
+import { convertScoreToGoals } from "../lib/scoring/convert-score-to-goals.ts";
 
 function player(playerId, slotType, positionOrder, vote) {
   return {
@@ -40,6 +41,16 @@ function svVote() {
 }
 
 function runChecks() {
+  assert.equal(convertScoreToGoals(29.5), 0, "29.5 -> 0 goals");
+  assert.equal(convertScoreToGoals(30), 1, "30 -> 1 goal");
+  assert.equal(convertScoreToGoals(34.5), 1, "34.5 -> 1 goal");
+  assert.equal(convertScoreToGoals(35), 2, "35 -> 2 goals");
+  assert.equal(convertScoreToGoals(39.5), 2, "39.5 -> 2 goals");
+  assert.equal(convertScoreToGoals(40), 3, "40 -> 3 goals");
+  assert.equal(convertScoreToGoals(41.5), 3, "41.5 -> 3 goals");
+  assert.equal(convertScoreToGoals(55), 6, "55 -> 6 goals");
+  assert.equal(convertScoreToGoals(60), 7, "60 -> 7 goals");
+
   const fantavote = calculateFantavote(
     validVote(6, {
       assists: 1,
