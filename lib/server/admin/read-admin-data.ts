@@ -94,6 +94,18 @@ export async function getAdminMatchdayVotesData(matchdayId: string) {
   const votesByPlayerId = new Map(
     matchday.playerVotes.map((vote) => [vote.playerId, vote])
   );
+  const pendingCount = matchday.requiredVotes.filter(
+    (record) => record.status === "PENDING"
+  ).length;
+  const completedStatusCount = matchday.requiredVotes.filter(
+    (record) => record.status === "COMPLETED"
+  ).length;
+  const svCount = matchday.requiredVotes.filter(
+    (record) => record.status === "SV"
+  ).length;
+  const ignoredCount = matchday.requiredVotes.filter(
+    (record) => record.status === "IGNORED"
+  ).length;
   const completedCount = matchday.requiredVotes.filter(
     (record) => record.status !== "PENDING"
   ).length;
@@ -101,10 +113,14 @@ export async function getAdminMatchdayVotesData(matchdayId: string) {
 
   return {
     completion: {
+      completedStatusCount,
       completedCount,
+      ignoredCount,
       isComplete:
         matchday.requiredVotes.length > 0 && missingCount === 0,
       missingCount,
+      pendingCount,
+      svCount,
       totalRequired: matchday.requiredVotes.length
     },
     matchday: {

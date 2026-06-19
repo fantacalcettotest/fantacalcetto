@@ -1,8 +1,11 @@
 "use server";
 
+import { RequiredVoteStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { prisma } from "@/lib/prisma.ts";
+import { calculateFantavote } from "@/lib/scoring/calculate-fantavote.ts";
 import { calculateFantasyFixtureResults } from "@/lib/server/fixtures/calculate-fantasy-fixture-results.ts";
 import { generateFantasyFixtures } from "@/lib/server/fixtures/generate-fantasy-fixtures.ts";
 import { checkVotesCompletion } from "@/lib/server/matchdays/check-votes-completion.ts";
@@ -10,6 +13,35 @@ import { generateRequiredVotePlayers } from "@/lib/server/matchdays/generate-req
 import { publishMatchday } from "@/lib/server/matchdays/publish-matchday.ts";
 import { calculateMatchdayScores } from "@/lib/server/scores/calculate-matchday-scores.ts";
 import { savePlayerVote } from "@/lib/server/votes/save-player-vote.ts";
+
+const VOTE_FIELD_NAMES = [
+  "assists",
+  "baseVote",
+  "cleanSheet",
+  "goals",
+  "notes",
+  "ownGoals",
+  "penaltiesMissed",
+  "penaltiesSaved",
+  "redCards",
+  "yellowCards"
+] as const;
+
+type VoteFieldName = (typeof VOTE_FIELD_NAMES)[number];
+type DemoVote = {
+  assists: number;
+  baseVote: number | null;
+  cleanSheet: number;
+  goals: number;
+  isSv: boolean;
+  notes: string;
+  ownGoals: number;
+  penaltiesMissed: number;
+  penaltiesSaved: number;
+  redCards: number;
+  usedFallback: boolean;
+  yellowCards: number;
+};
 
 function redirectWithMessage(
   redirectPath: string,
@@ -79,6 +111,217 @@ function readOptionalString(formData: FormData, fieldName: string): string | nul
   return value;
 }
 
+function getVoteFieldName(playerId: string, fieldName: VoteFieldName) {
+  return `votes.${playerId}.${fieldName}`;
+}
+
+function readVoteOptionalNumber(
+  formData: FormData,
+  playerId: string,
+  fieldName: Exclude<VoteFieldName, "notes">
+) {
+  return readOptionalNumber(formData, getVoteFieldName(playerId, fieldName));
+}
+
+function readVoteCounter(
+  formData: FormData,
+  playerId: string,
+  fieldName: Exclude<VoteFieldName, "baseVote" | "notes">
+) {
+  return readVoteOptionalNumber(formData, playerId, fieldName) ?? 0;
+}
+
+function readVoteOptionalString(formData: FormData, playerId: string, fieldName: "notes") {
+  return readOptionalString(formData, getVoteFieldName(playerId, fieldName));
+}
+
+function readVoteIsSv(formData: FormData, playerId: string) {
+  return formData.get(`votes.${playerId}.isSv`) === "on";
+}
+
+function readVotePlayerLabel(formData: FormData, playerId: string) {
+  return readOptionalString(formData, `playerLabels.${playerId}`) ?? playerId;
+}
+
+function randomChoice<T>(values: readonly T[]): T {
+  return values[Math.floor(Math.random() * values.length)];
+}
+
+function randomFromThresholds<T>(options: Array<{ max: number; value: T }>): T {
+  const roll = Math.random();
+  const match = options.find((option) => roll <= option.max);
+  return match ? match.value : options[options.length - 1].value;
+}
+
+function generateFallbackDemoVote(): DemoVote {
+  return {
+    assists: 0,
+    baseVote: 6,
+    cleanSheet: 0,
+    goals: 0,
+    isSv: false,
+    notes: "Voto demo generato per test",
+    ownGoals: 0,
+    penaltiesMissed: 0,
+    penaltiesSaved: 0,
+    redCards: 0,
+    usedFallback: true,
+    yellowCards: 0
+  };
+}
+
+function buildRandomDemoVoteCandidate(): Omit<DemoVote, "usedFallback"> {
+  const isSv = Math.random() < 0.1;
+
+  if (isSv) {
+    return {
+      assists: 0,
+      baseVote: null,
+      cleanSheet: 0,
+      goals: 0,
+      isSv: true,
+      notes: "Voto demo generato per test",
+      ownGoals: 0,
+      penaltiesMissed: 0,
+      penaltiesSaved: 0,
+      redCards: 0,
+      yellowCards: 0
+    };
+  }
+
+  const goals = randomFromThresholds<number>([
+    { max: 0.76, value: 0 },
+    { max: 0.95, value: 1 },
+    { max: 1, value: 2 }
+  ]);
+  const assists = randomFromThresholds<number>([
+    { max: 0.74, value: 0 },
+    { max: 0.95, value: 1 },
+    { max: 1, value: 2 }
+  ]);
+  const yellowCards = Math.random() < 0.2 ? 1 : 0;
+  const redCards = Math.random() < 0.05 ? 1 : 0;
+  const ownGoals = Math.random() < 0.04 ? 1 : 0;
+  const penaltiesMissed = Math.random() < 0.04 ? 1 : 0;
+  const penaltiesSaved = Math.random() < 0.03 ? 1 : 0;
+  const cleanSheet = Math.random() < 0.18 ? 1 : 0;
+
+  let baseVoteOptions = [5, 5.5, 6, 6.5, 7, 7.5, 8];
+
+  if (redCards === 1) {
+    baseVoteOptions = baseVoteOptions.filter((value) => value <= 6.5);
+  }
+
+  if (goals >= 2) {
+    baseVoteOptions = baseVoteOptions.filter((value) => value >= 6.5);
+  }
+
+  if (baseVoteOptions.length === 0) {
+    baseVoteOptions = [6];
+  }
+
+  return {
+    assists,
+    baseVote: randomChoice(baseVoteOptions),
+    cleanSheet,
+    goals,
+    isSv: false,
+    notes: "Voto demo generato per test",
+    ownGoals,
+    penaltiesMissed,
+    penaltiesSaved,
+    redCards,
+    yellowCards
+  };
+}
+
+function generateCoherentDemoVote(): DemoVote {
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const candidate = buildRandomDemoVoteCandidate();
+
+    if (candidate.isSv) {
+      return {
+        ...candidate,
+        usedFallback: false
+      };
+    }
+
+    const calculation = calculateFantavote(candidate);
+    if (
+      calculation.finalFantavote !== null &&
+      calculation.finalFantavote >= 0 &&
+      calculation.finalFantavote <= 10
+    ) {
+      return {
+        ...candidate,
+        usedFallback: false
+      };
+    }
+  }
+
+  return generateFallbackDemoVote();
+}
+
+function buildBulkVoteInput(formData: FormData, matchdayId: string, playerId: string) {
+  const isSv = readVoteIsSv(formData, playerId);
+  const baseVote = isSv
+    ? null
+    : readVoteOptionalNumber(formData, playerId, "baseVote");
+  const notes = readVoteOptionalString(formData, playerId, "notes");
+  const assists = readVoteCounter(formData, playerId, "assists");
+  const cleanSheet = readVoteCounter(formData, playerId, "cleanSheet");
+  const goals = readVoteCounter(formData, playerId, "goals");
+  const ownGoals = readVoteCounter(formData, playerId, "ownGoals");
+  const penaltiesMissed = readVoteCounter(formData, playerId, "penaltiesMissed");
+  const penaltiesSaved = readVoteCounter(formData, playerId, "penaltiesSaved");
+  const redCards = readVoteCounter(formData, playerId, "redCards");
+  const yellowCards = readVoteCounter(formData, playerId, "yellowCards");
+
+  const hasEventCounters =
+    assists > 0 ||
+    cleanSheet > 0 ||
+    goals > 0 ||
+    ownGoals > 0 ||
+    penaltiesMissed > 0 ||
+    penaltiesSaved > 0 ||
+    redCards > 0 ||
+    yellowCards > 0;
+  const isTouched =
+    isSv || baseVote !== null || hasEventCounters || Boolean(notes);
+
+  if (!isTouched) {
+    return {
+      kind: "skip" as const
+    };
+  }
+
+  if (!isSv && baseVote === null) {
+    return {
+      kind: "invalid" as const,
+      reason: "base vote obbligatorio"
+    };
+  }
+
+  return {
+    kind: "save" as const,
+    input: {
+      assists,
+      baseVote,
+      cleanSheet,
+      goals,
+      isSv,
+      matchdayId,
+      notes,
+      ownGoals,
+      penaltiesMissed,
+      penaltiesSaved,
+      playerId,
+      redCards,
+      yellowCards
+    }
+  };
+}
+
 export async function generateRequiredVotePlayersAction(formData: FormData) {
   const matchdayId = readRequiredString(formData, "matchdayId");
   const leagueId = readOptionalString(formData, "leagueId");
@@ -135,6 +378,178 @@ export async function savePlayerVoteAction(formData: FormData) {
   } catch (error) {
     errorMessage =
       error instanceof Error ? error.message : "Salvataggio non riuscito.";
+  }
+
+  redirectWithMessage(redirectPath, { error: errorMessage, notice });
+}
+
+export async function saveSinglePlayerVoteFromBulkAction(
+  playerId: string,
+  formData: FormData
+) {
+  const matchdayId = readRequiredString(formData, "matchdayId");
+  const leagueId = readOptionalString(formData, "leagueId");
+  const redirectPath = readRequiredString(formData, "redirectPath");
+  let notice: string | undefined;
+  let errorMessage: string | undefined;
+
+  try {
+    const parsedVote = buildBulkVoteInput(formData, matchdayId, playerId);
+
+    if (parsedVote.kind === "skip") {
+      throw new Error("Nessun dato da salvare per questo giocatore.");
+    }
+
+    if (parsedVote.kind === "invalid") {
+      throw new Error(`Riga non valida: ${parsedVote.reason}.`);
+    }
+
+    const result = await savePlayerVote(parsedVote.input);
+    await checkVotesCompletion(matchdayId);
+    revalidateAdminPaths(matchdayId, leagueId);
+    notice = `Voto salvato per ${result.playerId}.`;
+  } catch (error) {
+    errorMessage =
+      error instanceof Error ? error.message : "Salvataggio non riuscito.";
+  }
+
+  redirectWithMessage(redirectPath, { error: errorMessage, notice });
+}
+
+export async function saveBulkPlayerVotesAction(formData: FormData) {
+  const matchdayId = readRequiredString(formData, "matchdayId");
+  const leagueId = readOptionalString(formData, "leagueId");
+  const redirectPath = readRequiredString(formData, "redirectPath");
+  const playerIds = Array.from(
+    new Set(
+      formData
+        .getAll("playerIds")
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter((value) => value.length > 0)
+    )
+  );
+  let notice: string | undefined;
+  let errorMessage: string | undefined;
+
+  try {
+    const savedPlayerIds: string[] = [];
+    const invalidRows: string[] = [];
+    let skippedCount = 0;
+
+    for (const playerId of playerIds) {
+      const playerLabel = readVotePlayerLabel(formData, playerId);
+      const parsedVote = buildBulkVoteInput(formData, matchdayId, playerId);
+
+      if (parsedVote.kind === "skip") {
+        skippedCount += 1;
+        continue;
+      }
+
+      if (parsedVote.kind === "invalid") {
+        invalidRows.push(`${playerLabel}: ${parsedVote.reason}`);
+        continue;
+      }
+
+      const result = await savePlayerVote(parsedVote.input);
+      savedPlayerIds.push(result.playerId);
+    }
+
+    if (savedPlayerIds.length > 0) {
+      await checkVotesCompletion(matchdayId);
+    }
+
+    revalidateAdminPaths(matchdayId, leagueId);
+
+    if (savedPlayerIds.length === 0 && invalidRows.length === 0) {
+      notice = "Nessuna riga compilata da salvare. Le righe vuote sono state ignorate.";
+    } else if (invalidRows.length > 0) {
+      errorMessage = `Salvati ${savedPlayerIds.length} voti. Righe vuote ignorate: ${skippedCount}. Righe non valide: ${invalidRows.join(" | ")}.`;
+    } else {
+      notice = `Salvati ${savedPlayerIds.length} voti. Righe vuote ignorate: ${skippedCount}.`;
+    }
+  } catch (error) {
+    errorMessage =
+      error instanceof Error ? error.message : "Salvataggio bulk non riuscito.";
+  }
+
+  redirectWithMessage(redirectPath, { error: errorMessage, notice });
+}
+
+export async function generateDemoVotesForPendingPlayersAction(matchdayId: string) {
+  const redirectPath = `/admin/matchdays/${matchdayId}/votes?filter=pending`;
+  let notice: string | undefined;
+  let errorMessage: string | undefined;
+
+  try {
+    const matchday = await prisma.matchday.findUnique({
+      where: {
+        id: matchdayId
+      },
+      select: {
+        id: true,
+        leagueId: true
+      }
+    });
+
+    if (!matchday) {
+      throw new Error(`Matchday ${matchdayId} not found.`);
+    }
+
+    const pendingPlayers = await prisma.requiredVotePlayer.findMany({
+      where: {
+        matchdayId,
+        status: RequiredVoteStatus.PENDING
+      },
+      select: {
+        playerId: true
+      }
+    });
+
+    if (pendingPlayers.length === 0) {
+      notice = "Nessun giocatore pending da compilare.";
+    } else {
+      let generatedCount = 0;
+      let svCount = 0;
+      let fallbackCount = 0;
+
+      for (const pendingPlayer of pendingPlayers) {
+        const demoVote = generateCoherentDemoVote();
+
+        if (demoVote.isSv) {
+          svCount += 1;
+        }
+
+        if (demoVote.usedFallback) {
+          fallbackCount += 1;
+        }
+
+        await savePlayerVote({
+          assists: demoVote.assists,
+          baseVote: demoVote.baseVote,
+          cleanSheet: demoVote.cleanSheet,
+          goals: demoVote.goals,
+          isSv: demoVote.isSv,
+          matchdayId,
+          notes: demoVote.notes,
+          ownGoals: demoVote.ownGoals,
+          penaltiesMissed: demoVote.penaltiesMissed,
+          penaltiesSaved: demoVote.penaltiesSaved,
+          playerId: pendingPlayer.playerId,
+          redCards: demoVote.redCards,
+          yellowCards: demoVote.yellowCards
+        });
+
+        generatedCount += 1;
+      }
+
+      await checkVotesCompletion(matchdayId);
+      revalidateAdminPaths(matchdayId, matchday.leagueId);
+
+      notice = `Voti demo generati: ${generatedCount}. SV: ${svCount}. Fallback usati: ${fallbackCount}.`;
+    }
+  } catch (error) {
+    errorMessage =
+      error instanceof Error ? error.message : "Generazione voti demo non riuscita.";
   }
 
   redirectWithMessage(redirectPath, { error: errorMessage, notice });
