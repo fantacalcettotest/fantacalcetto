@@ -370,6 +370,24 @@ export async function getAdminLeagueScheduleData(leagueId: string) {
       matchdays: {
         orderBy: [{ number: "asc" }],
         select: {
+          fixtures: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: {
+              awayTeam: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              },
+              homeTeam: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              },
+              id: true
+            }
+          },
           id: true,
           number: true,
           status: true,

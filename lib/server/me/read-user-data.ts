@@ -207,11 +207,31 @@ export async function getUserTeamPageData(teamId: string) {
         select: {
           id: true,
           matchdays: {
-            where: {
-              status: MatchdayStatus.LINEUPS_OPEN
-            },
             orderBy: [{ number: "asc" }],
             select: {
+              fixtures: {
+                where: {
+                  OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }]
+                },
+                select: {
+                  awayGoals: true,
+                  awayTeam: {
+                    select: {
+                      id: true,
+                      name: true
+                    }
+                  },
+                  homeGoals: true,
+                  homeTeam: {
+                    select: {
+                      id: true,
+                      name: true
+                    }
+                  },
+                  id: true,
+                  status: true
+                }
+              },
               id: true,
               lineupDeadlineAt: true,
               number: true,
@@ -223,11 +243,6 @@ export async function getUserTeamPageData(teamId: string) {
       },
       leagueId: true,
       lineups: {
-        where: {
-          matchday: {
-            status: MatchdayStatus.LINEUPS_OPEN
-          }
-        },
         select: {
           id: true,
           matchdayId: true,
@@ -270,7 +285,13 @@ export async function getUserTeamPageData(teamId: string) {
     ...team,
     canLeaveLeague: !hasParticipationHistory && !leagueScheduleGenerated,
     hasParticipationHistory,
-    leagueScheduleGenerated
+    leagueScheduleGenerated,
+    nextMatchday:
+      team.league.matchdays.find(
+        (matchday) =>
+          matchday.status !== MatchdayStatus.PUBLISHED &&
+          matchday.status !== MatchdayStatus.LOCKED
+      ) ?? null
   };
 }
 

@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { generateLeagueScheduleAction } from "@/app/admin/actions";
+import {
+  generateLeagueScheduleAction,
+  openLineupsAction
+} from "@/app/admin/actions";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { StatusBadge } from "@/components/admin/status-badge";
 import { getAdminLeagueScheduleData } from "@/lib/server/admin/read-admin-data";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +42,30 @@ function Feedback({
       ) : null}
     </>
   );
+}
+
+function getRestTeams(
+  allTeams: Array<{ id: string; name: string }>,
+  fixtures: Array<{
+    awayTeam: { id: string; name: string };
+    homeTeam: { id: string; name: string };
+  }>
+) {
+  const scheduledTeamIds = new Set(
+    fixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id])
+  );
+
+  return allTeams.filter((team) => !scheduledTeamIds.has(team.id));
+}
+
+function ActionForm({
+  action,
+  children
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+  children: React.ReactNode;
+}) {
+  return <form action={action}>{children}</form>;
 }
 
 export default async function AdminLeagueSchedulePage({
@@ -173,18 +201,80 @@ export default async function AdminLeagueSchedulePage({
                       <h3 className="text-lg font-semibold text-slate-900">
                         Giornata {matchday.number}
                       </h3>
-                      <p className="mt-2 text-sm text-slate-600">
-                        Stato: <strong>{matchday.status}</strong> | Fixture:{" "}
-                        <strong>{matchday._count.fixtures}</strong>
-                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                        <span>
+                          Fixture: <strong>{matchday._count.fixtures}</strong>
+                        </span>
+                        {matchday.status === "LINEUPS_OPEN" ? (
+                          <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                            Formazioni aperte
+                          </span>
+                        ) : (
+                          <StatusBadge status={matchday.status} />
+                        )}
+                      </div>
                     </div>
 
-                    <Link
-                      href={`/admin/matchdays/${matchday.id}`}
-                      className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
-                    >
-                      Apri giornata
-                    </Link>
+                    <div className="flex flex-wrap gap-3">
+                      {matchday.status === "DRAFT" ? (
+                        <ActionForm action={openLineupsAction.bind(null, matchday.id)}>
+                          <button
+                            type="submit"
+                            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                          >
+                            Apri formazioni
+                          </button>
+                        </ActionForm>
+                      ) : null}
+
+                      <Link
+                        href={`/admin/matchdays/${matchday.id}`}
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                      >
+                        Dettaglio giornata
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2 text-sm text-slate-600">
+                    {matchday.fixtures.length === 0 ? (
+                      <p>Nessuno scontro disponibile per questa giornata.</p>
+                    ) : (
+                      matchday.fixtures.map((fixture) => (
+                        <p key={fixture.id}>
+                          <strong>{fixture.homeTeam.name}</strong> vs{" "}
+                          <strong>{fixture.awayTeam.name}</strong>
+                        </p>
+                      ))
+                    )}
+
+                    {(() => {
+                      const restTeams = getRestTeams(
+                        data.league.fantasyTeams,
+                        matchday.fixtures
+                      );
+
+                      if (restTeams.length === 0) {
+                        return null;
+                      }
+
+                      if (restTeams.length === 1) {
+                        return (
+                          <p className="text-amber-700">
+                            Squadra a riposo: <strong>{restTeams[0].name}</strong>
+                          </p>
+                        );
+                      }
+
+                      return (
+                        <p className="text-amber-700">
+                          Riposo/non abbinate:{" "}
+                          <strong>
+                            {restTeams.map((team) => team.name).join(", ")}
+                          </strong>
+                        </p>
+                      );
+                    })()}
                   </div>
                 </article>
               ))}

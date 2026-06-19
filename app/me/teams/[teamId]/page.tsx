@@ -40,6 +40,40 @@ function Feedback({ error, notice }: { error?: string; notice?: string }) {
   );
 }
 
+function getFixtureSummary(
+  teamId: string,
+  fixture:
+    | {
+        awayGoals: number | null;
+        awayTeam: { id: string; name: string };
+        homeGoals: number | null;
+        homeTeam: { id: string; name: string };
+      }
+    | undefined
+) {
+  if (!fixture) {
+    return {
+      isBye: true as const
+    };
+  }
+
+  const isHome = fixture.homeTeam.id === teamId;
+  const opponent = isHome ? fixture.awayTeam : fixture.homeTeam;
+  const hasResult =
+    fixture.homeGoals !== null && fixture.awayGoals !== null;
+
+  return {
+    hasResult,
+    isAway: !isHome,
+    isBye: false as const,
+    isHome,
+    opponent,
+    resultLabel: hasResult
+      ? `${fixture.homeGoals} - ${fixture.awayGoals}`
+      : null
+  };
+}
+
 export default async function TeamPage({ params, searchParams }: TeamPageProps) {
   const { teamId } = await params;
   const { error, notice } = await searchParams;
@@ -73,6 +107,9 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
     : rosterValidation.isValid
       ? "Rosa valida"
       : "Rosa completa ma non valida";
+  const nextMatchdaySummary = team.nextMatchday
+    ? getFixtureSummary(team.id, team.nextMatchday.fixtures[0])
+    : null;
 
   return (
     <div className="space-y-6">
@@ -131,17 +168,73 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">Giornate aperte</h2>
+        <h2 className="text-xl font-semibold text-slate-900">
+          Prossima giornata
+        </h2>
+
+        {!team.nextMatchday ? (
+          <p className="mt-4 text-sm text-slate-600">
+            Nessuna giornata futura disponibile al momento.
+          </p>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Giornata #{team.nextMatchday.number}
+                </h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Stato: <strong>{team.nextMatchday.status}</strong>
+                  {team.nextMatchday.lineupDeadlineAt ? (
+                    <>
+                      {" "}
+                      | Deadline:{" "}
+                      <strong>
+                        {new Intl.DateTimeFormat("it-IT", {
+                          dateStyle: "medium",
+                          timeStyle: "short"
+                        }).format(team.nextMatchday.lineupDeadlineAt)}
+                      </strong>
+                    </>
+                  ) : null}
+                </p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {nextMatchdaySummary?.isBye
+                    ? "Turno di riposo"
+                    : `${nextMatchdaySummary?.isHome ? "Casa" : "Trasferta"} vs ${nextMatchdaySummary?.opponent.name}`}
+                </p>
+              </div>
+
+              {!nextMatchdaySummary?.isBye &&
+              team.nextMatchday.status === "LINEUPS_OPEN" ? (
+                <Link
+                  href={`/me/teams/${team.id}/matchdays/${team.nextMatchday.id}/lineup`}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                >
+                  Schiera formazione
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">Calendario</h2>
 
         {team.league.matchdays.length === 0 ? (
           <p className="mt-4 text-sm text-slate-600">
-            Nessuna giornata aperta al momento.
+            Nessuna giornata disponibile per questa lega.
           </p>
         ) : (
           <div className="mt-5 space-y-4">
             {team.league.matchdays.map((matchday) => {
               const existingLineup = team.lineups.find(
                 (lineup) => lineup.matchdayId === matchday.id
+              );
+              const fixtureSummary = getFixtureSummary(
+                team.id,
+                matchday.fixtures[0]
               );
 
               return (
@@ -156,32 +249,35 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
                       </h3>
                       <p className="mt-2 text-sm text-slate-600">
                         Stato: <strong>{matchday.status}</strong>
-                        {matchday.lineupDeadlineAt ? (
-                          <>
-                            {" "}
-                            | Deadline:{" "}
-                            <strong>
-                              {new Intl.DateTimeFormat("it-IT", {
-                                dateStyle: "medium",
-                                timeStyle: "short"
-                              }).format(matchday.lineupDeadlineAt)}
-                            </strong>
-                          </>
-                        ) : null}
                       </p>
                       <p className="mt-2 text-sm text-slate-600">
-                        {existingLineup
-                          ? "Formazione inserita"
-                          : "Formazione non ancora inserita"}
+                        {fixtureSummary.isBye
+                          ? "Turno di riposo"
+                          : `${fixtureSummary.isHome ? "Casa" : "Trasferta"} vs ${fixtureSummary.opponent.name}`}
                       </p>
+                      {!fixtureSummary.isBye && fixtureSummary.resultLabel ? (
+                        <p className="mt-2 text-sm text-slate-600">
+                          Risultato: <strong>{fixtureSummary.resultLabel}</strong>
+                        </p>
+                      ) : null}
+                      {existingLineup ? (
+                        <p className="mt-2 text-sm text-emerald-700">
+                          Formazione inserita
+                        </p>
+                      ) : null}
                     </div>
 
-                    <Link
-                      href={`/me/teams/${team.id}/matchdays/${matchday.id}/lineup`}
-                      className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-                    >
-                      Schiera formazione
-                    </Link>
+                    <div className="flex flex-wrap gap-3">
+                      {!fixtureSummary.isBye &&
+                      matchday.status === "LINEUPS_OPEN" ? (
+                        <Link
+                          href={`/me/teams/${team.id}/matchdays/${matchday.id}/lineup`}
+                          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                        >
+                          {existingLineup ? "Modifica formazione" : "Schiera formazione"}
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
                 </article>
               );
