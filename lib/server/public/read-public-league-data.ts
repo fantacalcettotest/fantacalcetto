@@ -275,7 +275,7 @@ export async function getPublicLeagueScheduleData(leagueId: string) {
   };
 }
 
-export async function getPublicMatchdayData(
+export async function getPublicMatchdayDetailData(
   leagueId: string,
   matchdayId: string
 ) {
@@ -288,13 +288,18 @@ export async function getPublicMatchdayData(
       league: {
         select: {
           id: true,
-          name: true
+          maxTeams: true,
+          name: true,
+          fantasyTeams: {
+            orderBy: [{ createdAt: "asc" }, { name: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              name: true
+            }
+          }
         }
       },
       fixtures: {
-        where: {
-          status: FantasyFixtureStatus.PUBLISHED
-        },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         include: {
           awayTeam: {
@@ -368,42 +373,62 @@ export async function getPublicMatchdayData(
     return null;
   }
 
-  const isPublic = PUBLIC_MATCHDAY_STATUSES.includes(matchday.status);
+  const isPublished = PUBLIC_MATCHDAY_STATUSES.includes(matchday.status);
+  const participatingTeamIds = new Set<string>();
+
+  for (const fixture of matchday.fixtures) {
+    participatingTeamIds.add(fixture.homeTeam.id);
+    participatingTeamIds.add(fixture.awayTeam.id);
+  }
+
+  const restingTeams = matchday.league.fantasyTeams.filter(
+    (team) => !participatingTeamIds.has(team.id)
+  );
 
   return {
-    isPublic,
+    isPublished,
     matchday: {
-      fixtures: isPublic
-        ? matchday.fixtures.map((fixture) => ({
-            awayGoals: fixture.awayGoals,
-            awayTeam: fixture.awayTeam,
-            awayTeamScore: fixture.awayTeamScore
-              ? {
-                  id: fixture.awayTeamScore.id,
-                  totalScore: prismaDecimalToNumber(
-                    fixture.awayTeamScore.totalScore
-                  )
-                }
-              : null,
-            homeGoals: fixture.homeGoals,
-            homeTeam: fixture.homeTeam,
-            homeTeamScore: fixture.homeTeamScore
-              ? {
-                  id: fixture.homeTeamScore.id,
-                  totalScore: prismaDecimalToNumber(
-                    fixture.homeTeamScore.totalScore
-                  )
-                }
-              : null,
-            id: fixture.id,
-            status: fixture.status
-          }))
-        : [],
+      fixtures: matchday.fixtures.map((fixture) => ({
+        awayGoals: isPublished ? fixture.awayGoals : null,
+        awayTeam: fixture.awayTeam,
+        awayTeamScore: isPublished && fixture.awayTeamScore
+          ? {
+              id: fixture.awayTeamScore.id,
+              totalScore: prismaDecimalToNumber(
+                fixture.awayTeamScore.totalScore
+              )
+            }
+          : null,
+        homeGoals: isPublished ? fixture.homeGoals : null,
+        homeTeam: fixture.homeTeam,
+        homeTeamScore: isPublished && fixture.homeTeamScore
+          ? {
+              id: fixture.homeTeamScore.id,
+              totalScore: prismaDecimalToNumber(
+                fixture.homeTeamScore.totalScore
+              )
+            }
+          : null,
+        id: fixture.id,
+        showResult: isPublished,
+        status: isPublished
+          ? fixture.status
+          : fixture.status === FantasyFixtureStatus.PUBLISHED ||
+              fixture.status === FantasyFixtureStatus.LOCKED
+            ? FantasyFixtureStatus.SCHEDULED
+            : fixture.status
+      })),
       id: matchday.id,
-      league: matchday.league,
+      league: {
+        fantasyTeamsCount: matchday.league.fantasyTeams.length,
+        id: matchday.league.id,
+        maxTeams: matchday.league.maxTeams,
+        name: matchday.league.name
+      },
       number: matchday.number,
+      restingTeams,
       status: matchday.status,
-      teamScores: isPublic
+      teamScores: isPublished
         ? matchday.teamScores.map((teamScore) => ({
             autoSubsUsed: teamScore.autoSubsUsed,
             fantasyTeam: teamScore.fantasyTeam,
@@ -431,4 +456,11 @@ export async function getPublicMatchdayData(
         : []
     }
   };
+}
+
+export async function getPublicMatchdayData(
+  leagueId: string,
+  matchdayId: string
+) {
+  return getPublicMatchdayDetailData(leagueId, matchdayId);
 }
