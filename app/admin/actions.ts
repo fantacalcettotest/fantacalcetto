@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma.ts";
 import { calculateFantavote } from "@/lib/scoring/calculate-fantavote.ts";
 import { createLeague } from "@/lib/server/admin/create-league.ts";
 import { resetLeagueData } from "@/lib/server/admin/reset-league-data.ts";
+import { generateLeagueSchedule } from "@/lib/server/schedules/generate-league-schedule.ts";
 import { calculateFantasyFixtureResults } from "@/lib/server/fixtures/calculate-fantasy-fixture-results.ts";
 import { generateFantasyFixtures } from "@/lib/server/fixtures/generate-fantasy-fixtures.ts";
 import { checkVotesCompletion } from "@/lib/server/matchdays/check-votes-completion.ts";
@@ -89,6 +90,10 @@ function buildAdminNewMatchdayPath(leagueId: string) {
   return `/admin/leagues/${leagueId}/matchdays/new`;
 }
 
+function buildAdminLeagueSchedulePath(leagueId: string) {
+  return `/admin/leagues/${leagueId}/schedule`;
+}
+
 function buildAdminMatchdayPath(matchdayId: string) {
   return `/admin/matchdays/${matchdayId}`;
 }
@@ -133,6 +138,10 @@ function readOptionalString(formData: FormData, fieldName: string): string | nul
   }
 
   return value;
+}
+
+function isRoundRobinMode(value: string): value is "SINGLE_ROUND" | "DOUBLE_ROUND" {
+  return value === "SINGLE_ROUND" || value === "DOUBLE_ROUND";
 }
 
 function getVoteFieldName(playerId: string, fieldName: VoteFieldName) {
@@ -464,6 +473,39 @@ export async function createMatchdayAction(formData: FormData) {
         error instanceof Error
           ? error.message
           : "Creazione giornata non riuscita."
+    });
+  }
+}
+
+export async function generateLeagueScheduleAction(formData: FormData) {
+  await assertAdminAction();
+  const leagueId = readRequiredString(formData, "leagueId");
+  const rawMode = readRequiredString(formData, "mode");
+
+  if (!isRoundRobinMode(rawMode)) {
+    redirectWithMessage(buildAdminLeagueSchedulePath(leagueId), {
+      error: "Modalita calendario non valida."
+    });
+  }
+
+  try {
+    const result = await generateLeagueSchedule({
+      leagueId,
+      mode: rawMode
+    });
+
+    revalidateLeaguePaths(leagueId);
+    revalidatePath(buildAdminLeagueSchedulePath(leagueId));
+
+    redirectWithMessage(buildAdminLeagueSchedulePath(leagueId), {
+      notice: `Calendario generato. Modalita: ${result.mode}. Giornate: ${result.matchdayCount}. Partite: ${result.fixtureCount}. Turni di riposo: ${result.byeCount}.`
+    });
+  } catch (error) {
+    redirectWithMessage(buildAdminLeagueSchedulePath(leagueId), {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Generazione calendario non riuscita."
     });
   }
 }

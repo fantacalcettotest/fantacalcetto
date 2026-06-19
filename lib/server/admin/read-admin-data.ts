@@ -351,6 +351,77 @@ export async function getAdminLeagueMatchdayCreationData(leagueId: string) {
   });
 }
 
+export async function getAdminLeagueScheduleData(leagueId: string) {
+  const league = await prisma.league.findUnique({
+    where: {
+      id: leagueId
+    },
+    select: {
+      id: true,
+      maxTeams: true,
+      name: true,
+      fantasyTeams: {
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      matchdays: {
+        orderBy: [{ number: "asc" }],
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          _count: {
+            select: {
+              fixtures: true
+            }
+          }
+        }
+      },
+      _count: {
+        select: {
+          fantasyTeams: true,
+          matchdays: true
+        }
+      }
+    }
+  });
+
+  if (!league) {
+    return null;
+  }
+
+  const fixtureCount = await prisma.fantasyFixture.count({
+    where: {
+      matchday: {
+        leagueId
+      }
+    }
+  });
+
+  const teamCount = league._count.fantasyTeams;
+  const singleRoundMatchdayCount =
+    teamCount >= 2 ? (teamCount % 2 === 0 ? teamCount - 1 : teamCount) : 0;
+  const singleRoundFixtureCount =
+    teamCount >= 2 ? (teamCount * (teamCount - 1)) / 2 : 0;
+
+  return {
+    existingFixtureCount: fixtureCount,
+    hasExistingSchedule: league._count.matchdays > 0 || fixtureCount > 0,
+    league,
+    previews: {
+      doubleRoundFixtureCount: singleRoundFixtureCount * 2,
+      doubleRoundMatchdayCount: singleRoundMatchdayCount * 2,
+      hasBye: teamCount % 2 === 1,
+      singleRoundFixtureCount,
+      singleRoundMatchdayCount,
+      teamCount
+    }
+  };
+}
+
 export async function getAdminMatchdayDetailData(matchdayId: string) {
   const matchday = await prisma.matchday.findUnique({
     where: {

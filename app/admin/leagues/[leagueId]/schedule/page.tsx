@@ -1,0 +1,197 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import { generateLeagueScheduleAction } from "@/app/admin/actions";
+import { AdminShell } from "@/components/admin/admin-shell";
+import { getAdminLeagueScheduleData } from "@/lib/server/admin/read-admin-data";
+
+export const dynamic = "force-dynamic";
+
+type AdminLeagueSchedulePageProps = {
+  params: Promise<{
+    leagueId: string;
+  }>;
+  searchParams: Promise<{
+    error?: string;
+    notice?: string;
+  }>;
+};
+
+function Feedback({
+  error,
+  notice
+}: {
+  error?: string;
+  notice?: string;
+}) {
+  return (
+    <>
+      {error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
+      {notice ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {notice}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+export default async function AdminLeagueSchedulePage({
+  params,
+  searchParams
+}: AdminLeagueSchedulePageProps) {
+  const { leagueId } = await params;
+  const { error, notice } = await searchParams;
+  const data = await getAdminLeagueScheduleData(leagueId);
+
+  if (!data) {
+    notFound();
+  }
+
+  const canGenerateSchedule =
+    data.previews.teamCount >= 2 && !data.hasExistingSchedule;
+
+  return (
+    <AdminShell
+      title="Calendario campionato"
+      subtitle={`Genera il calendario round-robin per la lega ${data.league.name}.`}
+    >
+      <Feedback error={error} notice={notice} />
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-sm text-slate-600">
+          Lega: <strong>{data.league.name}</strong> | Squadre iscritte:{" "}
+          <strong>{data.previews.teamCount}</strong> /{" "}
+          <strong>{data.league.maxTeams}</strong> | Giornate esistenti:{" "}
+          <strong>{data.league._count.matchdays}</strong> | Fixture esistenti:{" "}
+          <strong>{data.existingFixtureCount}</strong>
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">Anteprima</h2>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <h3 className="text-lg font-semibold text-slate-900">Solo andata</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Giornate previste:{" "}
+              <strong>{data.previews.singleRoundMatchdayCount}</strong> | Partite
+              previste: <strong>{data.previews.singleRoundFixtureCount}</strong>
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <h3 className="text-lg font-semibold text-slate-900">
+              Andata e ritorno
+            </h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Giornate previste:{" "}
+              <strong>{data.previews.doubleRoundMatchdayCount}</strong> | Partite
+              previste: <strong>{data.previews.doubleRoundFixtureCount}</strong>
+            </p>
+          </div>
+        </div>
+
+        {data.previews.hasBye ? (
+          <p className="mt-4 text-sm text-amber-700">
+            Ogni giornata una squadra riposa.
+          </p>
+        ) : null}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">Generazione</h2>
+
+        {data.previews.teamCount < 2 ? (
+          <p className="mt-4 text-sm text-amber-700">
+            Servono almeno 2 squadre per generare il calendario.
+          </p>
+        ) : null}
+
+        {data.hasExistingSchedule ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Calendario già generato o giornate già presenti.
+          </div>
+        ) : null}
+
+        <form action={generateLeagueScheduleAction} className="mt-5 space-y-4">
+          <input type="hidden" name="leagueId" value={data.league.id} />
+
+          <label className="block space-y-2 text-sm text-slate-700">
+            <span className="font-medium">Modalita calendario</span>
+            <select
+              name="mode"
+              disabled={!canGenerateSchedule}
+              defaultValue="SINGLE_ROUND"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2"
+            >
+              <option value="SINGLE_ROUND">Solo andata</option>
+              <option value="DOUBLE_ROUND">Andata e ritorno</option>
+            </select>
+          </label>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={!canGenerateSchedule}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              Genera calendario
+            </button>
+            <Link
+              href="/admin"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+            >
+              Torna alla dashboard
+            </Link>
+          </div>
+        </form>
+      </section>
+
+      {data.hasExistingSchedule ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900">
+            Giornate esistenti
+          </h2>
+
+          {data.league.matchdays.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-600">
+              Nessuna giornata disponibile.
+            </p>
+          ) : (
+            <div className="mt-5 space-y-4">
+              {data.league.matchdays.map((matchday) => (
+                <article
+                  key={matchday.id}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        Giornata {matchday.number}
+                      </h3>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Stato: <strong>{matchday.status}</strong> | Fixture:{" "}
+                        <strong>{matchday._count.fixtures}</strong>
+                      </p>
+                    </div>
+
+                    <Link
+                      href={`/admin/matchdays/${matchday.id}`}
+                      className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                    >
+                      Apri giornata
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+    </AdminShell>
+  );
+}
