@@ -4,6 +4,7 @@ import { RequiredVoteStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { requireAdminAccess } from "@/lib/auth/admin.ts";
 import { prisma } from "@/lib/prisma.ts";
 import { calculateFantavote } from "@/lib/scoring/calculate-fantavote.ts";
 import { calculateFantasyFixtureResults } from "@/lib/server/fixtures/calculate-fantasy-fixture-results.ts";
@@ -58,6 +59,10 @@ function redirectWithMessage(
   }
 
   redirect(`${url.pathname}${url.search}`);
+}
+
+async function assertAdminAction() {
+  await requireAdminAccess();
 }
 
 function revalidateAdminPaths(matchdayId: string, leagueId?: string | null) {
@@ -323,6 +328,7 @@ function buildBulkVoteInput(formData: FormData, matchdayId: string, playerId: st
 }
 
 export async function generateRequiredVotePlayersAction(formData: FormData) {
+  await assertAdminAction();
   const matchdayId = readRequiredString(formData, "matchdayId");
   const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
@@ -343,6 +349,7 @@ export async function generateRequiredVotePlayersAction(formData: FormData) {
 }
 
 export async function savePlayerVoteAction(formData: FormData) {
+  await assertAdminAction();
   const matchdayId = readRequiredString(formData, "matchdayId");
   const playerId = readRequiredString(formData, "playerId");
   const leagueId = readOptionalString(formData, "leagueId");
@@ -387,6 +394,7 @@ export async function saveSinglePlayerVoteFromBulkAction(
   playerId: string,
   formData: FormData
 ) {
+  await assertAdminAction();
   const matchdayId = readRequiredString(formData, "matchdayId");
   const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
@@ -417,6 +425,7 @@ export async function saveSinglePlayerVoteFromBulkAction(
 }
 
 export async function saveBulkPlayerVotesAction(formData: FormData) {
+  await assertAdminAction();
   const matchdayId = readRequiredString(formData, "matchdayId");
   const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
@@ -476,6 +485,7 @@ export async function saveBulkPlayerVotesAction(formData: FormData) {
 }
 
 export async function generateDemoVotesForPendingPlayersAction(matchdayId: string) {
+  await assertAdminAction();
   const redirectPath = `/admin/matchdays/${matchdayId}/votes?filter=pending`;
   let notice: string | undefined;
   let errorMessage: string | undefined;
@@ -556,6 +566,7 @@ export async function generateDemoVotesForPendingPlayersAction(matchdayId: strin
 }
 
 export async function calculateMatchdayScoresAction(formData: FormData) {
+  await assertAdminAction();
   const matchdayId = readRequiredString(formData, "matchdayId");
   const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
@@ -575,6 +586,7 @@ export async function calculateMatchdayScoresAction(formData: FormData) {
 }
 
 export async function publishMatchdayAction(formData: FormData) {
+  await assertAdminAction();
   const matchdayId = readRequiredString(formData, "matchdayId");
   const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
@@ -594,6 +606,7 @@ export async function publishMatchdayAction(formData: FormData) {
 }
 
 export async function generateFantasyFixturesAction(formData: FormData) {
+  await assertAdminAction();
   const matchdayId = readRequiredString(formData, "matchdayId");
   const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
@@ -613,6 +626,7 @@ export async function generateFantasyFixturesAction(formData: FormData) {
 }
 
 export async function calculateFantasyFixtureResultsAction(formData: FormData) {
+  await assertAdminAction();
   const matchdayId = readRequiredString(formData, "matchdayId");
   const leagueId = readOptionalString(formData, "leagueId");
   const redirectPath = readRequiredString(formData, "redirectPath");
