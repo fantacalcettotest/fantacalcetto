@@ -1,11 +1,13 @@
 import { PlayerRole } from "@prisma/client";
 
 export type RosterCompositionPlayer = {
+  isBlockedInLeague?: boolean;
   role: PlayerRole;
 };
 
 export type RosterCompositionValidationResult = {
   attackerCount: number;
+  blockedCount: number;
   defenderCount: number;
   errors: string[];
   goalkeeperCount: number;
@@ -36,6 +38,7 @@ export function validateRosterComposition(
   const attackerCount = players.filter(
     (player) => player.role === PlayerRole.ATTACKER
   ).length;
+  const blockedCount = players.filter((player) => player.isBlockedInLeague).length;
 
   const errors: string[] = [];
   const isComplete = total === REQUIRED_ROSTER_SIZE;
@@ -58,8 +61,13 @@ export function validateRosterComposition(
     errors.push(`La rosa deve avere almeno ${MIN_ATTACKERS} attaccanti.`);
   }
 
+  if (blockedCount > 0) {
+    errors.push("La rosa contiene giocatori non disponibili in questa lega.");
+  }
+
   return {
     attackerCount,
+    blockedCount,
     defenderCount,
     errors,
     goalkeeperCount,

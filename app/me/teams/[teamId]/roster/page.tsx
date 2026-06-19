@@ -227,6 +227,11 @@ export default async function TeamRosterPage({
                     <tr key={entry.id}>
                       <td className="px-3 py-2 text-slate-900">
                         {entry.player.name}
+                        {entry.player.isBlockedInLeague ? (
+                          <span className="ml-2 inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">
+                            Non disponibile in questa lega
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2 text-slate-600">
                         <span

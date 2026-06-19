@@ -98,6 +98,14 @@ export default async function AdminLeagueSchedulePage({
           <strong>{data.league._count.matchdays}</strong> | Fixture esistenti:{" "}
           <strong>{data.existingFixtureCount}</strong>
         </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link
+            href={`/admin/leagues/${data.league.id}/players`}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+          >
+            Gestisci giocatori lega
+          </Link>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

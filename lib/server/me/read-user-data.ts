@@ -4,6 +4,7 @@ import { hasLeagueScheduleGenerated } from "@/lib/server/leagues/has-league-sche
 import { prisma } from "@/lib/prisma.ts";
 import type { PlayerRoleFilter } from "@/lib/players/player-role.ts";
 import { validateLineupComposition } from "@/lib/server/lineups/validate-lineup-composition.ts";
+import { getBlockedPlayerIdsForLeague } from "@/lib/server/players/league-blocked-players.ts";
 import { validateRosterComposition } from "@/lib/server/rosters/validate-roster-composition.ts";
 
 type AppUserAccessContext = {
@@ -274,6 +275,10 @@ export async function getUserTeamPageData(teamId: string) {
     return null;
   }
 
+  const blockedPlayerIds = new Set(
+    await getBlockedPlayerIdsForLeague(team.leagueId)
+  );
+
   const hasParticipationHistory =
     team._count.lineups > 0 ||
     team._count.teamScores > 0 ||
@@ -286,6 +291,13 @@ export async function getUserTeamPageData(teamId: string) {
     canLeaveLeague: !hasParticipationHistory && !leagueScheduleGenerated,
     hasParticipationHistory,
     leagueScheduleGenerated,
+    roster: team.roster.map((entry) => ({
+      ...entry,
+      player: {
+        ...entry.player,
+        isBlockedInLeague: blockedPlayerIds.has(entry.player.id)
+      }
+    })),
     nextMatchday:
       team.league.matchdays.find(
         (matchday) =>
@@ -301,9 +313,16 @@ export async function getUserTeamRosterPageData(
   searchQuery?: string
 ) {
   const normalizedSearchQuery = searchQuery?.trim() ?? "";
+  const team = await getUserTeamPageData(teamId);
 
-  const [team, activePlayersCount, availablePlayers] = await Promise.all([
-    getUserTeamPageData(teamId),
+  if (!team) {
+    return null;
+  }
+
+  const blockedPlayerIds = new Set(
+    await getBlockedPlayerIdsForLeague(team.leagueId)
+  );
+  const [activePlayersCount, availablePlayers] = await Promise.all([
     prisma.player.count({
       where: {
         isActive: true
@@ -311,6 +330,9 @@ export async function getUserTeamRosterPageData(
     }),
     prisma.player.findMany({
       where: {
+        id: {
+          notIn: [...blockedPlayerIds]
+        },
         isActive: true,
         ...(normalizedSearchQuery.length > 0
           ? {
@@ -333,10 +355,6 @@ export async function getUserTeamRosterPageData(
     })
   ]);
 
-  if (!team) {
-    return null;
-  }
-
   const rosterPlayerIds = new Set(team.roster.map((entry) => entry.player.id));
 
   return {
@@ -348,6 +366,7 @@ export async function getUserTeamRosterPageData(
     searchQuery: normalizedSearchQuery,
     rosterValidation: validateRosterComposition(
       team.roster.map((entry) => ({
+        isBlockedInLeague: entry.player.isBlockedInLeague,
         role: entry.player.role
       }))
     ),
@@ -457,8 +476,13 @@ export async function getUserLineupPageData(
     }
   });
 
+  const blockedPlayerIds = new Set(
+    await getBlockedPlayerIdsForLeague(team.leagueId)
+  );
+
   const rosterValidation = validateRosterComposition(
     team.roster.map((entry) => ({
+      isBlockedInLeague: blockedPlayerIds.has(entry.player.id),
       role: entry.player.role
     }))
   );
@@ -488,6 +512,7 @@ export async function getUserLineupPageData(
     matchday,
     rosterPlayers: team.roster.map((entry) => ({
       id: entry.player.id,
+      isBlockedInLeague: blockedPlayerIds.has(entry.player.id),
       name: entry.player.name,
       role: entry.player.role,
       source: entry.player.source,

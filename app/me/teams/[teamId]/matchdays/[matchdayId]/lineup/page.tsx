@@ -308,7 +308,14 @@ export default async function TeamMatchdayLineupPage({
 
                   return (
                     <tr key={player.id}>
-                      <td className="px-3 py-2 text-slate-900">{player.name}</td>
+                      <td className="px-3 py-2 text-slate-900">
+                        {player.name}
+                        {player.isBlockedInLeague ? (
+                          <span className="ml-2 inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">
+                            Non disponibile in questa lega
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="px-3 py-2 text-slate-600">
                         {getPlayerRoleLabel(player.role)}
                       </td>

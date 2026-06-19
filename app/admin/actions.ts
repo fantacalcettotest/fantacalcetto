@@ -9,6 +9,10 @@ import { prisma } from "@/lib/prisma.ts";
 import { calculateFantavote } from "@/lib/scoring/calculate-fantavote.ts";
 import { createLeague } from "@/lib/server/admin/create-league.ts";
 import { resetLeagueData } from "@/lib/server/admin/reset-league-data.ts";
+import {
+  blockPlayerInLeague,
+  unblockPlayerInLeague
+} from "@/lib/server/players/league-blocked-players.ts";
 import { generateLeagueSchedule } from "@/lib/server/schedules/generate-league-schedule.ts";
 import { calculateFantasyFixtureResults } from "@/lib/server/fixtures/calculate-fantasy-fixture-results.ts";
 import { generateFantasyFixtures } from "@/lib/server/fixtures/generate-fantasy-fixtures.ts";
@@ -84,6 +88,42 @@ function revalidateLeaguePaths(leagueId: string) {
   revalidatePath(`/leagues/${leagueId}`);
   revalidatePath(`/leagues/${leagueId}/standings`);
   revalidatePath(`/admin/leagues/${leagueId}/matchdays/new`);
+}
+
+async function revalidateLeaguePlayerAvailabilityPaths(leagueId: string) {
+  revalidatePath("/admin");
+  revalidatePath("/me");
+  revalidatePath(`/leagues/${leagueId}`);
+  revalidatePath(`/admin/leagues/${leagueId}/players`);
+
+  const [teams, openMatchdays] = await Promise.all([
+    prisma.fantasyTeam.findMany({
+      where: {
+        leagueId
+      },
+      select: {
+        id: true
+      }
+    }),
+    prisma.matchday.findMany({
+      where: {
+        leagueId,
+        status: MatchdayStatus.LINEUPS_OPEN
+      },
+      select: {
+        id: true
+      }
+    })
+  ]);
+
+  for (const team of teams) {
+    revalidatePath(`/me/teams/${team.id}`);
+    revalidatePath(`/me/teams/${team.id}/roster`);
+
+    for (const matchday of openMatchdays) {
+      revalidatePath(`/me/teams/${team.id}/matchdays/${matchday.id}/lineup`);
+    }
+  }
 }
 
 function buildAdminNewMatchdayPath(leagueId: string) {
@@ -405,6 +445,51 @@ export async function createLeagueAction(formData: FormData) {
         error instanceof Error
           ? error.message
           : "Creazione lega non riuscita."
+    });
+  }
+}
+
+export async function blockPlayerInLeagueAction(formData: FormData) {
+  await assertAdminAction();
+  const leagueId = readRequiredString(formData, "leagueId");
+  const playerId = readRequiredString(formData, "playerId");
+  const redirectPath = readRequiredString(formData, "redirectPath");
+  const reason = readOptionalString(formData, "reason");
+
+  try {
+    await blockPlayerInLeague(leagueId, playerId, reason);
+    await revalidateLeaguePlayerAvailabilityPaths(leagueId);
+
+    redirectWithMessage(redirectPath, {
+      notice: "Giocatore bloccato nella lega."
+    });
+  } catch (error) {
+    redirectWithMessage(redirectPath, {
+      error:
+        error instanceof Error ? error.message : "Blocco giocatore non riuscito."
+    });
+  }
+}
+
+export async function unblockPlayerInLeagueAction(formData: FormData) {
+  await assertAdminAction();
+  const leagueId = readRequiredString(formData, "leagueId");
+  const playerId = readRequiredString(formData, "playerId");
+  const redirectPath = readRequiredString(formData, "redirectPath");
+
+  try {
+    await unblockPlayerInLeague(leagueId, playerId);
+    await revalidateLeaguePlayerAvailabilityPaths(leagueId);
+
+    redirectWithMessage(redirectPath, {
+      notice: "Giocatore sbloccato nella lega."
+    });
+  } catch (error) {
+    redirectWithMessage(redirectPath, {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Sblocco giocatore non riuscito."
     });
   }
 }

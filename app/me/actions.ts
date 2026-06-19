@@ -307,6 +307,7 @@ export async function addPlayerToRosterAction(
         },
         select: {
           id: true,
+          leagueId: true,
           roster: {
             select: {
               id: true,
@@ -333,6 +334,22 @@ export async function addPlayerToRosterAction(
 
       if (!player || !player.isActive) {
         throw new Error("Giocatore non disponibile.");
+      }
+
+      const blockedPlayer = await tx.leagueBlockedPlayer.findUnique({
+        where: {
+          leagueId_playerId: {
+            leagueId: fullTeam.leagueId,
+            playerId: player.id
+          }
+        },
+        select: {
+          id: true
+        }
+      });
+
+      if (blockedPlayer) {
+        throw new Error("Questo giocatore non e disponibile in questa lega.");
       }
 
       if (fullTeam.roster.some((entry) => entry.playerId === player.id)) {
@@ -510,11 +527,35 @@ export async function saveLineupAction(formData: FormData) {
       );
 
       const rosterPlayersForValidation = fullTeam.roster.map((entry) => ({
+        isBlockedInLeague: false,
         role: entry.player.role
       }));
-      const rosterComposition = validateRosterComposition(rosterPlayersForValidation);
+      const blockedRosterPlayers = await tx.leagueBlockedPlayer.findMany({
+        where: {
+          leagueId: fullTeam.leagueId,
+          playerId: {
+            in: fullTeam.roster.map((entry) => entry.player.id)
+          }
+        },
+        select: {
+          playerId: true
+        }
+      });
+      const blockedRosterPlayerIds = new Set(
+        blockedRosterPlayers.map((entry) => entry.playerId)
+      );
+      const rosterComposition = validateRosterComposition(
+        fullTeam.roster.map((entry) => ({
+          isBlockedInLeague: blockedRosterPlayerIds.has(entry.player.id),
+          role: entry.player.role
+        }))
+      );
 
       if (!rosterComposition.isValid) {
+        if (rosterComposition.blockedCount > 0) {
+          throw new Error("Uno o piu giocatori non sono disponibili in questa lega.");
+        }
+
         throw new Error("Completa prima la rosa.");
       }
 
@@ -574,6 +615,22 @@ export async function saveLineupAction(formData: FormData) {
         }
 
         duplicateCheck.add(player.id);
+      }
+
+      const selectedBlockedPlayers = await tx.leagueBlockedPlayer.findMany({
+        where: {
+          leagueId: fullTeam.leagueId,
+          playerId: {
+            in: [...duplicateCheck]
+          }
+        },
+        select: {
+          playerId: true
+        }
+      });
+
+      if (selectedBlockedPlayers.length > 0) {
+        throw new Error("Uno o piu giocatori non sono disponibili in questa lega.");
       }
 
       const lineupValidation = validateLineupComposition(

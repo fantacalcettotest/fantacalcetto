@@ -1,4 +1,5 @@
 import { prisma } from "../../prisma.ts";
+import type { PlayerRoleFilter } from "@/lib/players/player-role";
 import { calculateLeagueStandings } from "../standings/calculate-league-standings.ts";
 import { prismaDecimalToNumber } from "../votes/shared.ts";
 
@@ -437,6 +438,76 @@ export async function getAdminLeagueScheduleData(leagueId: string) {
       singleRoundMatchdayCount,
       teamCount
     }
+  };
+}
+
+export async function getAdminLeaguePlayersData(
+  leagueId: string,
+  roleFilter: PlayerRoleFilter,
+  searchQuery?: string
+) {
+  const normalizedSearchQuery = searchQuery?.trim() ?? "";
+  const league = await prisma.league.findUnique({
+    where: {
+      id: leagueId
+    },
+    select: {
+      id: true,
+      name: true
+    }
+  });
+
+  if (!league) {
+    return null;
+  }
+
+  const [activePlayers, blockedPlayers] = await Promise.all([
+    prisma.player.findMany({
+      where: {
+        isActive: true,
+        ...(normalizedSearchQuery.length > 0
+          ? {
+              name: {
+                contains: normalizedSearchQuery,
+                mode: "insensitive"
+              }
+            }
+          : {}),
+        ...(roleFilter === "ALL" ? {} : { role: roleFilter })
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        source: true,
+        teamName: true
+      }
+    }),
+    prisma.leagueBlockedPlayer.findMany({
+      where: {
+        leagueId
+      },
+      select: {
+        playerId: true,
+        reason: true
+      }
+    })
+  ]);
+
+  const blockedPlayersMap = new Map(
+    blockedPlayers.map((entry) => [entry.playerId, entry.reason ?? null])
+  );
+
+  return {
+    league,
+    players: activePlayers.map((player) => ({
+      ...player,
+      blockReason: blockedPlayersMap.get(player.id) ?? null,
+      isBlockedInLeague: blockedPlayersMap.has(player.id)
+    })),
+    roleFilter,
+    searchQuery: normalizedSearchQuery
   };
 }
 
