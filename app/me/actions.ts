@@ -58,6 +58,7 @@ function buildTeamRedirectPath(
 function buildRosterRedirectPath(
   teamId: string,
   roleFilter?: string | null,
+  searchQuery?: string | null,
   options?: {
     error?: string;
     notice?: string;
@@ -67,6 +68,10 @@ function buildRosterRedirectPath(
   const parsedFilter = parsePlayerRoleFilter(roleFilter);
 
   searchParams.set("role", parsedFilter);
+
+  if (typeof searchQuery === "string" && searchQuery.trim().length > 0) {
+    searchParams.set("q", searchQuery.trim());
+  }
 
   if (options?.error) {
     searchParams.set("error", options.error);
@@ -289,6 +294,7 @@ export async function addPlayerToRosterAction(
   teamId: string,
   playerId: string,
   currentRoleFilter: PlayerRoleFilter | undefined,
+  currentSearchQuery: string | undefined,
   _formData: FormData
 ) {
   const team = await assertTeamOwnerOrAdmin(teamId);
@@ -347,7 +353,7 @@ export async function addPlayerToRosterAction(
 
     revalidateRosterPaths(teamId);
     redirect(
-      buildRosterRedirectPath(teamId, currentRoleFilter, {
+      buildRosterRedirectPath(teamId, currentRoleFilter, currentSearchQuery, {
         notice: "Giocatore aggiunto alla rosa."
       })
     );
@@ -361,7 +367,7 @@ export async function addPlayerToRosterAction(
           : "Impossibile aggiungere il giocatore alla rosa.";
 
     redirect(
-      buildRosterRedirectPath(teamId, currentRoleFilter, {
+      buildRosterRedirectPath(teamId, currentRoleFilter, currentSearchQuery, {
         error: errorMessage
       })
     );
@@ -372,6 +378,7 @@ export async function removePlayerFromRosterAction(
   teamId: string,
   playerId: string,
   currentRoleFilter: PlayerRoleFilter | undefined,
+  currentSearchQuery: string | undefined,
   _formData: FormData
 ) {
   const team = await assertTeamOwnerOrAdmin(teamId);
@@ -403,13 +410,13 @@ export async function removePlayerFromRosterAction(
 
     revalidateRosterPaths(teamId);
     redirect(
-      buildRosterRedirectPath(teamId, currentRoleFilter, {
+      buildRosterRedirectPath(teamId, currentRoleFilter, currentSearchQuery, {
         notice: "Giocatore rimosso dalla rosa."
       })
     );
   } catch (error) {
     redirect(
-      buildRosterRedirectPath(teamId, currentRoleFilter, {
+      buildRosterRedirectPath(teamId, currentRoleFilter, currentSearchQuery, {
         error:
           error instanceof Error
             ? error.message

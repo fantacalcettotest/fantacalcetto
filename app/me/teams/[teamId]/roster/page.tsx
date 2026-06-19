@@ -24,6 +24,7 @@ type RosterPageProps = {
   searchParams: Promise<{
     error?: string;
     notice?: string;
+    q?: string;
     role?: string;
   }>;
 };
@@ -80,17 +81,33 @@ function renderRole(role: PlayerRole) {
   return getPlayerRoleLabel(role);
 }
 
+function getRoleBadgeClass(role: PlayerRole) {
+  switch (role) {
+    case "GOALKEEPER":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "DEFENDER":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "MIDFIELDER":
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    case "ATTACKER":
+      return "border-rose-200 bg-rose-50 text-rose-700";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+}
+
 export default async function TeamRosterPage({
   params,
   searchParams
 }: RosterPageProps) {
   const { teamId } = await params;
-  const { error, notice, role } = await searchParams;
+  const { error, notice, q, role } = await searchParams;
   const roleFilter = parsePlayerRoleFilter(role);
+  const searchQuery = q?.trim() ?? "";
   const authContext = await requireAuthenticatedAppUser(
     `/me/teams/${teamId}/roster`
   );
-  const data = await getUserTeamRosterPageData(teamId, roleFilter);
+  const data = await getUserTeamRosterPageData(teamId, roleFilter, searchQuery);
 
   if (!data) {
     notFound();
@@ -142,11 +159,15 @@ export default async function TeamRosterPage({
           <div>
             <h3 className="text-xl font-semibold text-slate-900">Stato rosa</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Totale: <strong>{data.rosterValidation.total}</strong> | Portieri:{" "}
+              Rosa: <strong>{data.rosterValidation.total}/8</strong> | Portieri:{" "}
               <strong>{data.rosterValidation.goalkeeperCount}</strong> | Difensori:{" "}
               <strong>{data.rosterValidation.defenderCount}</strong> | Centrocampisti:{" "}
               <strong>{data.rosterValidation.midfielderCount}</strong> | Attaccanti:{" "}
               <strong>{data.rosterValidation.attackerCount}</strong>
+            </p>
+            <p className="mt-2 text-sm text-slate-600">
+              Vincoli: minimo 1 portiere, minimo 2 difensori, minimo 2 attaccanti,
+              totale 8 giocatori.
             </p>
           </div>
 
@@ -198,7 +219,8 @@ export default async function TeamRosterPage({
                     null,
                     data.team.id,
                     entry.player.id,
-                    roleFilter
+                    roleFilter,
+                    data.searchQuery
                   );
 
                   return (
@@ -207,7 +229,11 @@ export default async function TeamRosterPage({
                         {entry.player.name}
                       </td>
                       <td className="px-3 py-2 text-slate-600">
-                        {renderRole(entry.player.role)}
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${getRoleBadgeClass(entry.player.role)}`}
+                        >
+                          {renderRole(entry.player.role)}
+                        </span>
                       </td>
                       <td className="px-3 py-2 text-slate-600">
                         {entry.player.teamName ?? "-"}
@@ -246,11 +272,36 @@ export default async function TeamRosterPage({
           </div>
         </div>
 
+        <form className="mt-4 flex flex-wrap gap-3">
+          <input type="hidden" name="role" value={roleFilter} />
+          <input
+            type="search"
+            name="q"
+            defaultValue={data.searchQuery}
+            placeholder="Cerca per nome giocatore"
+            className="min-w-[260px] flex-1 rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
+          />
+          <button
+            type="submit"
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+          >
+            Cerca
+          </button>
+          {data.searchQuery ? (
+            <Link
+              href={`/me/teams/${data.team.id}/roster?role=${roleFilter}`}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+            >
+              Reset
+            </Link>
+          ) : null}
+        </form>
+
         <div className="mt-4 flex flex-wrap gap-2">
           {PLAYER_ROLE_FILTERS.map((filterOption) => (
             <Link
               key={filterOption}
-              href={`/me/teams/${data.team.id}/roster?role=${filterOption}`}
+              href={`/me/teams/${data.team.id}/roster?role=${filterOption}${data.searchQuery ? `&q=${encodeURIComponent(data.searchQuery)}` : ""}`}
               className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
                 roleFilter === filterOption
                   ? "bg-slate-900 text-white"
@@ -268,7 +319,9 @@ export default async function TeamRosterPage({
           </div>
         ) : data.availablePlayers.length === 0 ? (
           <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-            Nessun risultato per il filtro selezionato.
+            {data.searchQuery
+              ? `Nessun giocatore trovato per "${data.searchQuery}".`
+              : "Nessun risultato per il filtro selezionato."}
           </div>
         ) : (
           <div className="mt-5 overflow-x-auto">
@@ -289,7 +342,8 @@ export default async function TeamRosterPage({
                     null,
                     data.team.id,
                     player.id,
-                    roleFilter
+                    roleFilter,
+                    data.searchQuery
                   );
                   const isAddDisabled = player.isSelected || rosterIsFull;
 
@@ -297,7 +351,11 @@ export default async function TeamRosterPage({
                     <tr key={player.id}>
                       <td className="px-3 py-2 text-slate-900">{player.name}</td>
                       <td className="px-3 py-2 text-slate-600">
-                        {renderRole(player.role)}
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${getRoleBadgeClass(player.role)}`}
+                        >
+                          {renderRole(player.role)}
+                        </span>
                       </td>
                       <td className="px-3 py-2 text-slate-600">
                         {player.teamName ?? "-"}

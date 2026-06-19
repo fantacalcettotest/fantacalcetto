@@ -297,8 +297,11 @@ export async function getUserTeamPageData(teamId: string) {
 
 export async function getUserTeamRosterPageData(
   teamId: string,
-  roleFilter: PlayerRoleFilter
+  roleFilter: PlayerRoleFilter,
+  searchQuery?: string
 ) {
+  const normalizedSearchQuery = searchQuery?.trim() ?? "";
+
   const [team, activePlayersCount, availablePlayers] = await Promise.all([
     getUserTeamPageData(teamId),
     prisma.player.count({
@@ -309,9 +312,17 @@ export async function getUserTeamRosterPageData(
     prisma.player.findMany({
       where: {
         isActive: true,
+        ...(normalizedSearchQuery.length > 0
+          ? {
+              name: {
+                contains: normalizedSearchQuery,
+                mode: "insensitive"
+              }
+            }
+          : {}),
         ...(roleFilter === "ALL" ? {} : { role: roleFilter })
       },
-      orderBy: [{ role: "asc" }, { name: "asc" }],
+      orderBy: [{ name: "asc" }],
       select: {
         id: true,
         name: true,
@@ -334,6 +345,7 @@ export async function getUserTeamRosterPageData(
       ...player,
       isSelected: rosterPlayerIds.has(player.id)
     })),
+    searchQuery: normalizedSearchQuery,
     rosterValidation: validateRosterComposition(
       team.roster.map((entry) => ({
         role: entry.player.role
