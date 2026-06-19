@@ -58,6 +58,12 @@ export default async function AdminPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <Link
+                    href={`/admin/leagues/${league.id}/matchdays/new`}
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                  >
+                    Crea giornata
+                  </Link>
+                  <Link
                     href={`/leagues/${league.id}`}
                     className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
                   >
@@ -100,6 +106,12 @@ export default async function AdminPage() {
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-3">
+                        <Link
+                          href={`/admin/matchdays/${matchday.id}`}
+                          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                        >
+                          Dettaglio giornata
+                        </Link>
                         <Link
                           href={`/admin/matchdays/${matchday.id}/votes`}
                           className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"

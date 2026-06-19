@@ -332,3 +332,54 @@ export async function getAdminLeagueStandingsData(leagueId: string) {
     standings: standingsResult.standings
   };
 }
+
+export async function getAdminLeagueMatchdayCreationData(leagueId: string) {
+  return prisma.league.findUnique({
+    where: {
+      id: leagueId
+    },
+    select: {
+      id: true,
+      name: true,
+      _count: {
+        select: {
+          fantasyTeams: true,
+          matchdays: true
+        }
+      }
+    }
+  });
+}
+
+export async function getAdminMatchdayDetailData(matchdayId: string) {
+  return prisma.matchday.findUnique({
+    where: {
+      id: matchdayId
+    },
+    select: {
+      id: true,
+      league: {
+        select: {
+          id: true,
+          name: true,
+          _count: {
+            select: {
+              fantasyTeams: true
+            }
+          }
+        }
+      },
+      lineupDeadlineAt: true,
+      number: true,
+      status: true,
+      _count: {
+        select: {
+          lineups: true,
+          playerVotes: true,
+          requiredVotes: true,
+          teamScores: true
+        }
+      }
+    }
+  });
+}

@@ -1,6 +1,6 @@
 "use server";
 
-import { RequiredVoteStatus } from "@prisma/client";
+import { MatchdayStatus, RequiredVoteStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -68,10 +68,12 @@ async function assertAdminAction() {
 
 function revalidateAdminPaths(matchdayId: string, leagueId?: string | null) {
   revalidatePath("/admin");
+  revalidatePath(`/admin/matchdays/${matchdayId}`);
   revalidatePath(`/admin/matchdays/${matchdayId}/votes`);
   revalidatePath(`/admin/matchdays/${matchdayId}/scores`);
   if (leagueId) {
     revalidatePath(`/admin/leagues/${leagueId}/standings`);
+    revalidatePath(`/admin/leagues/${leagueId}/matchdays/new`);
   }
 }
 
@@ -79,6 +81,15 @@ function revalidateLeaguePaths(leagueId: string) {
   revalidatePath("/admin");
   revalidatePath(`/leagues/${leagueId}`);
   revalidatePath(`/leagues/${leagueId}/standings`);
+  revalidatePath(`/admin/leagues/${leagueId}/matchdays/new`);
+}
+
+function buildAdminNewMatchdayPath(leagueId: string) {
+  return `/admin/leagues/${leagueId}/matchdays/new`;
+}
+
+function buildAdminMatchdayPath(matchdayId: string) {
+  return `/admin/matchdays/${matchdayId}`;
 }
 
 function readRequiredString(
@@ -384,6 +395,177 @@ export async function createLeagueAction(formData: FormData) {
         error instanceof Error
           ? error.message
           : "Creazione lega non riuscita."
+    });
+  }
+}
+
+export async function createMatchdayAction(formData: FormData) {
+  await assertAdminAction();
+  const leagueId = readRequiredString(formData, "leagueId");
+  const rawNumber = formData.get("number");
+  const number =
+    typeof rawNumber === "string" && rawNumber.trim().length > 0
+      ? Number(rawNumber)
+      : Number.NaN;
+
+  try {
+    if (!Number.isInteger(number) || number <= 0) {
+      throw new Error("Il numero giornata deve essere un intero positivo.");
+    }
+
+    const league = await prisma.league.findUnique({
+      where: {
+        id: leagueId
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!league) {
+      throw new Error("Lega non trovata.");
+    }
+
+    const existingMatchday = await prisma.matchday.findUnique({
+      where: {
+        leagueId_number: {
+          leagueId,
+          number
+        }
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (existingMatchday) {
+      throw new Error("Esiste gia una giornata con questo numero nella lega.");
+    }
+
+    const matchday = await prisma.matchday.create({
+      data: {
+        leagueId,
+        number,
+        status: MatchdayStatus.DRAFT
+      },
+      select: {
+        id: true
+      }
+    });
+
+    revalidateLeaguePaths(leagueId);
+    redirectWithMessage(buildAdminMatchdayPath(matchday.id), {
+      notice: `Giornata ${number} creata in stato DRAFT.`
+    });
+  } catch (error) {
+    redirectWithMessage(buildAdminNewMatchdayPath(leagueId), {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Creazione giornata non riuscita."
+    });
+  }
+}
+
+export async function openLineupsAction(matchdayId: string, _formData: FormData) {
+  await assertAdminAction();
+
+  try {
+    const matchday = await prisma.matchday.findUnique({
+      where: {
+        id: matchdayId
+      },
+      select: {
+        id: true,
+        leagueId: true,
+        number: true,
+        status: true
+      }
+    });
+
+    if (!matchday) {
+      throw new Error("Giornata non trovata.");
+    }
+
+    if (matchday.status !== MatchdayStatus.DRAFT) {
+      throw new Error("Puoi aprire le formazioni solo da stato DRAFT.");
+    }
+
+    await prisma.matchday.update({
+      where: {
+        id: matchday.id
+      },
+      data: {
+        status: MatchdayStatus.LINEUPS_OPEN
+      }
+    });
+
+    revalidateAdminPaths(matchday.id, matchday.leagueId);
+    redirectWithMessage(buildAdminMatchdayPath(matchday.id), {
+      notice: `Inserimento formazioni aperto per la giornata ${matchday.number}.`
+    });
+  } catch (error) {
+    redirectWithMessage(buildAdminMatchdayPath(matchdayId), {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Apertura formazioni non riuscita."
+    });
+  }
+}
+
+export async function lockLineupsAction(matchdayId: string, _formData: FormData) {
+  await assertAdminAction();
+
+  try {
+    const matchday = await prisma.matchday.findUnique({
+      where: {
+        id: matchdayId
+      },
+      select: {
+        id: true,
+        leagueId: true,
+        number: true,
+        status: true,
+        _count: {
+          select: {
+            lineups: true
+          }
+        }
+      }
+    });
+
+    if (!matchday) {
+      throw new Error("Giornata non trovata.");
+    }
+
+    if (matchday.status !== MatchdayStatus.LINEUPS_OPEN) {
+      throw new Error("Puoi chiudere le formazioni solo da stato LINEUPS_OPEN.");
+    }
+
+    if (matchday._count.lineups === 0) {
+      throw new Error("Non puoi chiudere le formazioni: nessuna formazione inserita.");
+    }
+
+    await prisma.matchday.update({
+      where: {
+        id: matchday.id
+      },
+      data: {
+        status: MatchdayStatus.LINEUPS_LOCKED
+      }
+    });
+
+    revalidateAdminPaths(matchday.id, matchday.leagueId);
+    redirectWithMessage(buildAdminMatchdayPath(matchday.id), {
+      notice: `Formazioni chiuse per la giornata ${matchday.number}.`
+    });
+  } catch (error) {
+    redirectWithMessage(buildAdminMatchdayPath(matchdayId), {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Chiusura formazioni non riuscita."
     });
   }
 }
