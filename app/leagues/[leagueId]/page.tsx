@@ -50,6 +50,15 @@ export default async function PublicLeaguePage({
           </Link>
         </div>
 
+        <div className="mt-4">
+          <Link
+            href={`/leagues/${data.league.id}/schedule`}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+          >
+            Calendario
+          </Link>
+        </div>
+
         {data.league.registrationsClosed ? (
           <div className="mt-4 rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
             Iscrizioni chiuse: il calendario della lega è già stato generato.

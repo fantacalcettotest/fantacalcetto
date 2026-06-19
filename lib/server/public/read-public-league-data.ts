@@ -172,6 +172,109 @@ export async function getPublicLeagueStandingsData(leagueId: string) {
   };
 }
 
+export async function getPublicLeagueScheduleData(leagueId: string) {
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: {
+      id: true,
+      maxTeams: true,
+      name: true,
+      fantasyTeams: {
+        orderBy: [{ createdAt: "asc" }, { name: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      matchdays: {
+        orderBy: [{ number: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          fixtures: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              status: true,
+              awayGoals: true,
+              awayTeamScoreId: true,
+              homeGoals: true,
+              homeTeamScoreId: true,
+              awayTeam: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              },
+              homeTeam: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (!league) {
+    return null;
+  }
+
+  const allTeams = league.fantasyTeams.map((team) => ({
+    id: team.id,
+    name: team.name
+  }));
+
+  return {
+    league: {
+      fantasyTeamsCount: league.fantasyTeams.length,
+      id: league.id,
+      maxTeams: league.maxTeams,
+      name: league.name
+    },
+    matchdays: league.matchdays.map((matchday) => {
+      const isPublic = PUBLIC_MATCHDAY_STATUSES.includes(matchday.status);
+      const participatingTeamIds = new Set<string>();
+
+      for (const fixture of matchday.fixtures) {
+        participatingTeamIds.add(fixture.homeTeam.id);
+        participatingTeamIds.add(fixture.awayTeam.id);
+      }
+
+      const restingTeams = allTeams.filter(
+        (team) => !participatingTeamIds.has(team.id)
+      );
+
+      return {
+        fixtures: matchday.fixtures.map((fixture) => ({
+          awayGoals: isPublic ? fixture.awayGoals : null,
+          awayTeam: fixture.awayTeam,
+          homeGoals: isPublic ? fixture.homeGoals : null,
+          homeTeam: fixture.homeTeam,
+          id: fixture.id,
+          showResult: isPublic,
+          status: fixture.status,
+          teamScoreState: isPublic
+            ? {
+                awayTeamScoreId: fixture.awayTeamScoreId,
+                homeTeamScoreId: fixture.homeTeamScoreId
+              }
+            : null
+        })),
+        id: matchday.id,
+        isPublic,
+        number: matchday.number,
+        restingTeams,
+        status: matchday.status
+      };
+    })
+  };
+}
+
 export async function getPublicMatchdayData(
   leagueId: string,
   matchdayId: string

@@ -50,6 +50,12 @@ export default async function PublicLeagueLayout({
                 Home lega
               </Link>
               <Link
+                href={`/leagues/${league.id}/schedule`}
+                className="rounded-xl border border-white/40 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20"
+              >
+                Calendario
+              </Link>
+              <Link
                 href={`/leagues/${league.id}/standings`}
                 className="rounded-xl border border-white/40 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20"
               >
