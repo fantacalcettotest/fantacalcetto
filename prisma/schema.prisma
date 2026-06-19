@@ -167,7 +167,6 @@ model FantasyTeam {
   awayFixtures FantasyFixture[] @relation("FantasyFixtureAwayTeam")
 
   @@unique([leagueId, userId])
-  @@unique([userId])
   @@index([userId])
 }
 

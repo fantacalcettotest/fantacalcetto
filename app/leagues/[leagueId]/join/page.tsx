@@ -60,17 +60,14 @@ export default async function JoinLeaguePage({
 
         <Feedback error={error} />
 
-        {data.existingGlobalTeam ? (
+        {data.existingLeagueTeam ? (
           <section className="rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold text-slate-900">
-              Hai gia una squadra: {data.existingGlobalTeam.name}
+              Hai gia una squadra in questa lega: {data.existingLeagueTeam.name}
             </h2>
-            <p className="mt-2 text-sm text-slate-600">
-              Lega attuale: <strong>{data.existingGlobalTeam.league.name}</strong>
-            </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
-                href={`/me/teams/${data.existingGlobalTeam.id}`}
+                href={`/me/teams/${data.existingLeagueTeam.id}`}
                 className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
               >
                 Apri la mia squadra
@@ -106,8 +103,8 @@ export default async function JoinLeaguePage({
             </h2>
             <p className="mt-2 text-sm text-slate-600">
               Squadre iscritte: <strong>{data.league._count.fantasyTeams}</strong> /{" "}
-              <strong>{data.league.maxTeams}</strong>. Ogni utente puo avere una
-              sola squadra in tutta l&apos;app.
+              <strong>{data.league.maxTeams}</strong>. Puoi avere una squadra per
+              ogni lega.
             </p>
 
             <form action={createFantasyTeamAction} className="mt-5 space-y-4">

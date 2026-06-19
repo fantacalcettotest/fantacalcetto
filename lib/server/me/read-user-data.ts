@@ -89,8 +89,6 @@ export async function getUserDashboardData(appUserId: string) {
     }
   >();
 
-  const myTeam = user.fantasyTeams[0] ?? null;
-
   for (const membership of user.leagueMembers) {
     leaguesMap.set(membership.league.id, {
       id: membership.league.id,
@@ -113,26 +111,28 @@ export async function getUserDashboardData(appUserId: string) {
     });
   }
 
+  const myTeams = user.fantasyTeams.map((team) => ({
+    id: team.id,
+    league: team.league,
+    leagueId: team.leagueId,
+    name: team.name,
+    openMatchdays: team.league.matchdays.map((matchday) => ({
+      ...matchday,
+      hasLineup: team.lineups.some((lineup) => lineup.matchdayId === matchday.id)
+    }))
+  }));
+
   return {
     leagues: Array.from(leaguesMap.values()).sort((left, right) =>
       left.name.localeCompare(right.name, "it")
     ),
-    myTeam,
-    myTeamOpenMatchdays:
-      myTeam
-        ? myTeam.league.matchdays.map((matchday) => ({
-            ...matchday,
-            hasLineup: myTeam.lineups.some(
-              (lineup) => lineup.matchdayId === matchday.id
-            )
-          }))
-        : [],
+    myTeams,
     user
   };
 }
 
 export async function getLeagueJoinPageData(leagueId: string, appUserId: string) {
-  const [league, existingLeagueTeam, existingGlobalTeam] = await Promise.all([
+  const [league, existingLeagueTeam] = await Promise.all([
     prisma.league.findUnique({
       where: {
         id: leagueId
@@ -167,21 +167,6 @@ export async function getLeagueJoinPageData(leagueId: string, appUserId: string)
         },
         name: true
       }
-    }),
-    prisma.fantasyTeam.findUnique({
-      where: {
-        userId: appUserId
-      },
-      select: {
-        id: true,
-        league: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        name: true
-      }
     })
   ]);
 
@@ -191,9 +176,8 @@ export async function getLeagueJoinPageData(leagueId: string, appUserId: string)
 
   return {
     canJoin:
-      !existingGlobalTeam &&
+      !existingLeagueTeam &&
       league._count.fantasyTeams < league.maxTeams,
-    existingGlobalTeam,
     existingLeagueTeam,
     isFull: league._count.fantasyTeams >= league.maxTeams,
     league
