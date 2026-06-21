@@ -1,143 +1,183 @@
 import Link from "next/link";
 
-const userSteps = [
+const gettingStartedSteps = [
   {
     description:
-      "Sfoglia le leghe pubbliche disponibili e scegli quella giusta per entrare come partecipante.",
+      "Crea il tuo account per entrare nell'area personale.",
+    title: "Registrati"
+  },
+  {
+    description:
+      "Scegli una lega disponibile e crea la tua squadra.",
     title: "Entra in una lega"
   },
   {
     description:
-      "Crea la tua squadra fantasy e completa una rosa da 8 giocatori rispettando i vincoli minimi.",
-    title: "Crea la tua rosa"
+      "Completa la rosa con 8 giocatori e preparati per la prossima giornata.",
+    title: "Completa la rosa"
   },
   {
     description:
-      "Quando la giornata e aperta, scegli 5 titolari e 3 panchinari ordinati per le sostituzioni automatiche.",
+      "Quando la giornata e aperta, scegli titolari e panchina.",
     title: "Schiera la formazione"
   },
   {
     description:
-      "Segui risultati pubblicati, scontri diretti e classifica della lega direttamente dalle pagine pubbliche.",
+      "Controlla risultati, partite e classifica direttamente dall'app.",
     title: "Segui risultati e classifica"
   }
 ] as const;
 
-const featureCards = [
+const quickLinks = [
   {
-    cta: "Apri le leghe",
+    cta: "Vedi leghe disponibili",
     description:
-      "Consulta leghe, calendario, giornate pubblicate e classifica in un unico punto di accesso.",
+      "Sfoglia le leghe aperte, guarda calendario, giornate pubblicate e classifica.",
     href: "/leagues",
-    title: "Dashboard lega"
+    title: "Scopri le leghe"
   },
   {
-    cta: "Vai alla tua area",
+    cta: "Vai alla mia squadra",
     description:
-      "Dall'area personale puoi gestire rosa e formazione per le giornate aperte della tua squadra.",
+      "Apri la tua area personale per gestire rosa, formazione e calendario.",
     href: "/me",
-    title: "Schiera formazione"
+    title: "La mia squadra"
   },
   {
-    cta: "Apri area admin",
+    cta: "Vai alla mia squadra",
     description:
-      "Gli admin possono inserire voti, calcolare punteggi, generare calendario e pubblicare i risultati.",
-    href: "/admin",
-    title: "Admin pagelle"
+      "Se hai gia una squadra, riparti da qui per controllare la prossima giornata.",
+    href: "/me",
+    title: "Prossima formazione"
   },
   {
-    cta: "Vedi classifica",
+    cta: "Vedi leghe disponibili",
     description:
-      "Le classifiche pubbliche mostrano punti, differenza reti, fantapunti totali e miglior punteggio.",
+      "Segui classifiche e risultati pubblicati anche senza entrare in una lega.",
     href: "/leagues",
-    title: "Classifica"
+    title: "Risultati e classifica"
   }
 ] as const;
 
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-slate-100">
-      <section className="bg-gradient-to-br from-pitch via-emerald-800 to-emerald-700 px-6 py-10 text-white">
+      <section className="bg-gradient-to-br from-pitch via-emerald-800 to-emerald-700 px-5 py-8 text-white sm:px-6 sm:py-10">
         <div className="mx-auto max-w-6xl">
-          <div className="grid gap-8 lg:grid-cols-[1.3fr_0.9fr] lg:items-center">
-            <div className="rounded-3xl bg-white/10 p-8 backdrop-blur-sm">
+          <div className="grid gap-6 lg:grid-cols-[1.25fr_0.95fr] lg:items-center">
+            <div className="rounded-3xl bg-white/10 p-6 backdrop-blur-sm sm:p-8">
               <p className="text-sm uppercase tracking-[0.25em] text-emerald-100">
-                Fantacalcetto MVP
+                Fantacalcetto
               </p>
-              <h1 className="mt-4 text-4xl font-bold sm:text-5xl">
-                Fantasy calcetto per leghe private, risultati pubblici e gestione
-                completa della giornata.
+              <h1 className="mt-4 text-4xl font-bold leading-tight sm:text-5xl">
+                Entra in una lega, crea la tua rosa e segui ogni giornata.
               </h1>
-              <p className="mt-4 max-w-3xl text-sm leading-7 text-emerald-50 sm:text-base">
-                Fantacalcetto unisce area pubblica, area utente e strumenti admin:
-                entri in una lega, costruisci la rosa, schieri la formazione e segui
-                punteggi, scontri diretti e classifica.
+              <p className="mt-4 max-w-3xl text-base leading-7 text-emerald-50">
+                Fantacalcetto e una web app per leghe private di fantasy calcetto:
+                scegli una lega, costruisci la tua squadra, schiera la formazione
+                e controlla risultati e classifica.
+              </p>
+              <p className="mt-4 text-sm font-medium text-emerald-100">
+                Primo passo: guarda le leghe disponibili e scegli dove giocare.
               </p>
 
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Link
                   href="/leagues"
-                  className="rounded-xl bg-white px-5 py-3 text-sm font-medium text-emerald-900 transition hover:bg-emerald-50"
+                  className="rounded-xl bg-white px-5 py-3 text-center text-base font-semibold text-emerald-900 transition hover:bg-emerald-50"
                 >
-                  Vedi leghe
+                  Vedi leghe disponibili
+                </Link>
+                <Link
+                  href="/signup"
+                  className="rounded-xl border border-emerald-200 bg-emerald-500/20 px-5 py-3 text-center text-base font-medium text-white transition hover:bg-emerald-500/30"
+                >
+                  Registrati
                 </Link>
                 <Link
                   href="/login"
-                  className="rounded-xl border border-white/40 bg-transparent px-5 py-3 text-sm font-medium text-white transition hover:border-white hover:bg-white/10"
+                  className="rounded-xl border border-white/40 bg-transparent px-5 py-3 text-center text-base font-medium text-white transition hover:border-white hover:bg-white/10"
                 >
                   Accedi
                 </Link>
                 <Link
-                  href="/signup"
-                  className="rounded-xl border border-emerald-200 bg-emerald-500/20 px-5 py-3 text-sm font-medium text-white transition hover:bg-emerald-500/30"
+                  href="/me"
+                  className="rounded-xl border border-white/40 bg-transparent px-5 py-3 text-center text-base font-medium text-white transition hover:border-white hover:bg-white/10"
                 >
-                  Registrati
+                  Vai alla mia squadra
                 </Link>
               </div>
             </div>
 
             <div className="grid gap-4">
-              <div className="rounded-3xl bg-white p-6 text-slate-900 shadow-sm">
-                <h2 className="text-lg font-semibold">Per i partecipanti</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  Accesso rapido a leghe pubbliche, area personale, gestione rosa e
-                  schieramento formazione per le giornate aperte.
+              <section className="rounded-3xl bg-white p-6 text-slate-900 shadow-sm">
+                <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
+                  Nuovo? Parti da qui
                 </p>
-              </div>
-              <div className="rounded-3xl bg-slate-900 p-6 text-white shadow-sm">
-                <h2 className="text-lg font-semibold">Per gli admin</h2>
+                <h2 className="mt-3 text-xl font-semibold">
+                  In pochi passaggi sei pronto a giocare
+                </h2>
+                <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+                  <li>1. Registrati o accedi.</li>
+                  <li>2. Entra in una lega disponibile.</li>
+                  <li>3. Completa la tua rosa.</li>
+                  <li>4. Schiera la formazione per la giornata.</li>
+                  <li>5. Segui risultati e classifica.</li>
+                </ol>
+              </section>
+
+              <section className="rounded-3xl bg-slate-900 p-6 text-white shadow-sm">
+                <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-300">
+                  Hai gia una squadra?
+                </p>
+                <h2 className="mt-3 text-xl font-semibold">
+                  Torna nella tua area personale
+                </h2>
                 <p className="mt-3 text-sm leading-6 text-slate-300">
-                  Crea leghe, genera calendario, inserisci voti, calcola punteggi e
-                  pubblica risultati e classifica della giornata.
+                  Vai alla tua area personale per gestire rosa, formazione,
+                  calendario e risultati.
                 </p>
-              </div>
+                <div className="mt-5">
+                  <Link
+                    href="/me"
+                    className="inline-flex rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+                  >
+                    Vai alla mia squadra
+                  </Link>
+                </div>
+              </section>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="px-6 py-10">
+      <section className="px-5 py-10 sm:px-6">
         <div className="mx-auto max-w-6xl space-y-10">
-          <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
                   Come funziona
                 </p>
                 <h2 className="mt-3 text-3xl font-bold text-slate-900">
-                  Flusso semplice, dal join alla classifica
+                  Dal primo accesso alla classifica
                 </h2>
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">
+                  Il percorso e semplice: entri in una lega, prepari la squadra,
+                  schieri la formazione e segui ogni partita pubblicata.
+                </p>
               </div>
+
               <Link
                 href="/leagues"
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
               >
-                Esplora le leghe
+                Vedi leghe disponibili
               </Link>
             </div>
 
-            <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {userSteps.map((step, index) => (
+            <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              {gettingStartedSteps.map((step, index) => (
                 <article
                   key={step.title}
                   className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
@@ -156,25 +196,8 @@ export default function HomePage() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-            <div className="max-w-3xl">
-              <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
-                Per gli admin
-              </p>
-              <h2 className="mt-3 text-3xl font-bold text-slate-900">
-                Strumenti operativi per gestire l'intera lega
-              </h2>
-              <p className="mt-4 text-sm leading-7 text-slate-600 sm:text-base">
-                L&apos;area admin consente di creare leghe, generare il calendario,
-                aprire e chiudere le formazioni, inserire i voti, calcolare i
-                punteggi squadra e pubblicare risultati e classifica senza
-                interventi manuali sul database.
-              </p>
-            </div>
-          </section>
-
           <section className="grid gap-6 md:grid-cols-2">
-            {featureCards.map((card) => (
+            {quickLinks.map((card) => (
               <Link
                 key={card.title}
                 href={card.href}
@@ -186,7 +209,7 @@ export default function HomePage() {
                 <p className="mt-3 text-sm leading-6 text-slate-600">
                   {card.description}
                 </p>
-                <p className="mt-5 text-sm font-medium text-emerald-700 transition group-hover:text-emerald-800">
+                <p className="mt-5 text-sm font-semibold text-emerald-700 transition group-hover:text-emerald-800">
                   {card.cta}
                 </p>
               </Link>
